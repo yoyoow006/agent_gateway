@@ -50,10 +50,10 @@
 
 ## 8. 运维 CLI（internal/cli）
 
-- [ ] 8.1 `serve`：前台运行、SIGHUP 热重载（失败保旧配置并记日志）、启动时确保 local.toml 与三令牌（admin/全局/项目随建）存在、非回环监听告警。TDD：重载成功/失败两例。验证：`go test ./internal/cli/ -run Serve`。
-- [ ] 8.2 `start/stop/status/logs`：start 分离进程（pidfile `.run/agw.pid`、日志 `.run/agw.log`、已运行报错不覆盖）；stop SIGTERM 等待退出；status 展示 pid/监听/供应商熔断与计数（`--json`）；logs 查看/跟随。TDD（临时目录 + 短生命周期 serve）。验证：`go test ./internal/cli/ -run 'Start|Stop|Status'`。
-- [ ] 8.3 `provider add/remove/enable/disable/list/test` 与 `switch`：写回 local.toml 并调用 `/__agw/reload`；`provider test` 按协议发最小请求报延迟/错误；`switch` 写 Preferred。TDD：写回内容、配置变更后热生效、switch 后排序变化（用 fake 网关）。验证：`go test ./internal/cli/ -run 'Provider|Switch'`。
-- [ ] 8.4 日志脱敏工具 `redact.go` + 测试：密钥/令牌/Authorization 头替换为前 6 位 + `***`。验证：`go test ./internal/cli/ -run Redact`。
+- [x] 8.1 `serve`：前台运行、SIGHUP 热重载（失败保旧配置并记日志）、启动时确保 local.toml 与三令牌（admin/全局/项目随建）存在、非回环监听告警。TDD：重载成功/失败两例。验证：`go test ./internal/cli/ -run Serve`。
+- [x] 8.2 `start/stop/status/logs`：start 分离进程（pidfile `.run/agw.pid`、日志 `.run/agw.log`、已运行报错不覆盖）；stop SIGTERM 等待退出；status 展示 pid/监听/供应商熔断与计数（`--json`）；logs 查看/跟随。TDD（临时目录 + 短生命周期 serve）。验证：`go test ./internal/cli/ -run 'Start|Stop|Status'`。
+- [x] 8.3 `provider add/remove/enable/disable/list/test` 与 `switch`：写回 local.toml 并调用 `/__agw/reload`；`provider test` 按协议发最小请求报延迟/错误；`switch` 写 Preferred。TDD：写回内容、配置变更后热生效、switch 后排序变化（用 fake 网关）。验证：`go test ./internal/cli/ -run 'Provider|Switch'`。
+- [x] 8.4 日志脱敏工具 `redact.go` + 测试：密钥/令牌/Authorization 头替换为前 6 位 + `***`。验证：`go test ./internal/cli/ -run Redact`。
 
 ## 9. agent 适配（internal/agent）
 
