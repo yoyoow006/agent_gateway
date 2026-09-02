@@ -334,3 +334,46 @@ func TestAnthropicBuildDropsThinkingHistory(t *testing.T) {
 		t.Errorf("工具块应保留: %s", body)
 	}
 }
+
+// NEW-02 回归：仅 thinking 的 assistant 轮不产出空 text 块（会被上游 400）。
+func TestAnthropicSkipsThinkingOnlyTurn(t *testing.T) {
+	req := protocol.Request{
+		Model: "m", MaxTokens: 10,
+		Turns: []protocol.Turn{
+			{Role: "user", Parts: []protocol.Part{protocol.Text("hi")}},
+			{Role: "assistant", Parts: []protocol.Part{protocol.Thinking("只想未说")}},
+			{Role: "user", Parts: []protocol.Part{protocol.Text("go")}},
+		},
+	}
+	_, _, body, err := anthropicCodec.BuildRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), `"text":""`) {
+		t.Errorf("不应产出空 text 块: %s", body)
+	}
+	var parsed struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	json.Unmarshal(body, &parsed)
+	if len(parsed.Messages) != 2 {
+		t.Errorf("thinking-only 轮应被跳过, messages=%d: %s", len(parsed.Messages), body)
+	}
+}
+
+// NEW-04 回归：responses 顶层未映射字段触发降级告警。
+func TestResponsesTopLevelUnknownFieldWarns(t *testing.T) {
+	var warnings []string
+	prev := protocol.DropHook
+	protocol.DropHook = func(detail string) { warnings = append(warnings, detail) }
+	defer func() { protocol.DropHook = prev }()
+
+	body := []byte(`{"model":"m","input":"hi","reasoning":{"effort":"high"},"prompt_cache_key":"k1"}`)
+	if _, err := responsesCodec.ParseRequest(body); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(warnings, "\n")
+	if !strings.Contains(joined, "reasoning") || !strings.Contains(joined, "prompt_cache_key") {
+		t.Errorf("顶层字段丢弃应有告警: %v", warnings)
+	}
+}

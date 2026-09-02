@@ -51,13 +51,19 @@ type wireRequest struct {
 	Instructions       string          `json:"instructions,omitempty"`
 	Input              json.RawMessage `json:"input"` // string 或 items
 	PreviousResponseID string          `json:"previous_response_id,omitempty"`
-	Tools              []wireTool      `json:"tools,omitempty"`
-	ToolChoice         json.RawMessage `json:"tool_choice,omitempty"`
-	MaxOutputTokens    int             `json:"max_output_tokens,omitempty"`
-	Temperature        *float64        `json:"temperature,omitempty"`
-	TopP               *float64        `json:"top_p,omitempty"`
-	Stream             bool            `json:"stream,omitempty"`
-	Store              *bool           `json:"store,omitempty"`
+	// 以下顶层字段无跨协议对应，解析仅为告警
+	Reasoning         json.RawMessage `json:"reasoning,omitempty"`
+	Include           json.RawMessage `json:"include,omitempty"`
+	Text              json.RawMessage `json:"text,omitempty"`
+	ParallelToolCalls json.RawMessage `json:"parallel_tool_calls,omitempty"`
+	PromptCacheKey    json.RawMessage `json:"prompt_cache_key,omitempty"`
+	Tools             []wireTool      `json:"tools,omitempty"`
+	ToolChoice        json.RawMessage `json:"tool_choice,omitempty"`
+	MaxOutputTokens   int             `json:"max_output_tokens,omitempty"`
+	Temperature       *float64        `json:"temperature,omitempty"`
+	TopP              *float64        `json:"top_p,omitempty"`
+	Stream            bool            `json:"stream,omitempty"`
+	Store             *bool           `json:"store,omitempty"`
 }
 
 // ParseRequest 解析 Responses 请求为 IR。
@@ -89,6 +95,14 @@ func ParseRequest(body []byte) (protocol.Request, error) {
 	}
 	if w.PreviousResponseID != "" {
 		protocol.NotifyDrop("previous_response_id 被丢弃（agw 无状态路由，请求必须自包含上下文；请确认客户端已禁用响应存储）")
+	}
+	for name, raw := range map[string]json.RawMessage{
+		"reasoning": w.Reasoning, "include": w.Include, "text": w.Text,
+		"parallel_tool_calls": w.ParallelToolCalls, "prompt_cache_key": w.PromptCacheKey,
+	} {
+		if len(raw) > 0 {
+			protocol.NotifyDrop("responses 顶层字段 " + name + " 无跨协议对应，将被丢弃")
+		}
 	}
 	for _, it := range items {
 		switch it.Type {

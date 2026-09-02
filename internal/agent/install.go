@@ -146,7 +146,7 @@ func InstallCodex(opts Options) error {
 	if err := os.WriteFile(cfgPath, []byte(sb.String()), 0o600); err != nil {
 		return err
 	}
-	fmt.Printf("Codex 已安装并指向网关 %s/v1（wire_api=responses，已禁用响应存储）\n", opts.Listen)
+	fmt.Printf("Codex 已安装并指向网关 %s/v1（wire_api=responses；已写入响应存储禁用键——认得该键的旧版本会生效，新版 codex 默认即无状态）\n", opts.Listen)
 	fmt.Printf("使用前设置环境变量 AGW_API_KEY=<agw 全局令牌>（agw run codex 会自动注入）\n")
 	fmt.Printf("回滚：用同目录 .agw-backup-* 恢复 config.toml（重写可能丢失注释）\n")
 	return nil

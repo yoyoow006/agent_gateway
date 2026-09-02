@@ -64,7 +64,7 @@ export OFFICIAL_KEY=sk-xxx
 
 - 请求/响应/流式 SSE 全量映射：消息、工具调用与结果、base64 图片、stop_reason、usage。
 - 明确的降级：`cache_control` 在非 anthropic 上游丢弃（日志告警，仅影响成本）；thinking/reasoning best-effort；音视频块返回 400。
-- `agw install codex` 写入 `disable_response_storage = true` + `wire_api = "responses"`：每请求自包含，无 `previous_response_id` 依赖——这是"任意切换"的前提。
+- `agw install codex` 写入 `wire_api = "responses"` 与响应存储禁用键（认得该键的旧版 codex 生效；新版 codex 默认即无状态）：每请求自包含，无 `previous_response_id` 依赖——这是"任意切换"的前提。
 
 ### 虚拟令牌 → 项目档案
 

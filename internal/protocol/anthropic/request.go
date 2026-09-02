@@ -295,7 +295,9 @@ func BuildRequest(req protocol.Request) (string, http.Header, []byte, error) {
 			}
 		}
 		if len(blocks) == 0 {
-			blocks = append(blocks, wireBlock{Type: "text", Text: ""})
+			// 整轮都被丢弃（如仅 thinking 的 assistant 轮）：跳过该消息，
+			// 避免产出空 text 块被上游 400 拒绝
+			continue
 		}
 		raw, err := json.Marshal(blocks)
 		if err != nil {
