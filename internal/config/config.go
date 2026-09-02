@@ -326,6 +326,9 @@ func (c *Config) rebuildTokenIndex() {
 	}
 }
 
+// RebuildTokenIndex 重建令牌→项目索引（绕过 Load 直接构造 Config 时必须调用）。
+func (c *Config) RebuildTokenIndex() { c.rebuildTokenIndex() }
+
 // TokenProject 反查虚拟令牌所属项目。
 func (c *Config) TokenProject(token string) (project string, ok bool) {
 	project, ok = c.tokenIndex[token]

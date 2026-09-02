@@ -33,9 +33,9 @@
 
 ## 5. 网关 HTTP 核心（internal/gateway）
 
-- [ ] 5.1 先写失败测试 `server_test.go`（httptest）：令牌→档案（全局令牌/项目令牌/未知令牌 401 且错误体按端点协议）；`/v1/models` 返回配置模型；`/__agw/healthz` 免认证 200；`/__agw/metrics|reload` 无 admin 令牌 401。
-- [ ] 5.2 实现 `server.go`：路由表（`/v1/messages`、`/v1/messages/count_tokens`、`/v1/responses`（POST/GET）、`/v1/chat/completions`、`/v1/models`、`/__agw/*`）、令牌中间件、协议错误体构造器、优雅停机（15s 排空）。验证：`go test ./internal/gateway/`。
-- [ ] 5.3 透传转发 `proxy.go`（TDD）：同协议字节级透传（认证替换、Host 重写、hop-by-hop 头剔除、查询串保留、SSE 逐写 Flusher、GET 无体）；有 `model_map` 时仅重写 model 字段（`json.RawMessage` 最小解析）；上游错误体按客户端协议透传。验证：httptest 断言上游收到的字节与客户端发送一致（model 外）。
+- [x] 5.1 先写失败测试 `server_test.go`（httptest）：令牌→档案（全局令牌/项目令牌/未知令牌 401 且错误体按端点协议）；`/v1/models` 返回配置模型；`/__agw/healthz` 免认证 200；`/__agw/metrics|reload` 无 admin 令牌 401。
+- [x] 5.2 实现 `server.go`：路由表（`/v1/messages`、`/v1/messages/count_tokens`、`/v1/responses`（POST/GET）、`/v1/chat/completions`、`/v1/models`、`/__agw/*`）、令牌中间件、协议错误体构造器、优雅停机（15s 排空）。验证：`go test ./internal/gateway/`。
+- [x] 5.3 透传转发 `proxy.go`（TDD）：同协议字节级透传（认证替换、Host 重写、hop-by-hop 头剔除、查询串保留、SSE 逐写 Flusher、GET 无体）；有 `model_map` 时仅重写 model 字段（`json.RawMessage` 最小解析）；上游错误体按客户端协议透传。验证：httptest 断言上游收到的字节与客户端发送一致（model 外）。
 
 ## 6. failover 引擎（internal/gateway）
 
