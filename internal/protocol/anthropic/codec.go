@@ -1,0 +1,93 @@
+package anthropic
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+
+	"agent_gateway/internal/protocol"
+)
+
+// Codec 把包函数装配为 protocol.Codec。
+type Codec struct{}
+
+// DefaultCodec 是无状态单例。
+var DefaultCodec protocol.Codec = Codec{}
+
+// Name 实现协议名。
+func (Codec) Name() string { return string("anthropic") }
+
+// ParseRequest 见包级函数。
+func (Codec) ParseRequest(body []byte) (protocol.Request, error) { return ParseRequest(body) }
+
+// BuildRequest 见包级函数。
+func (Codec) BuildRequest(req protocol.Request) (string, http.Header, []byte, error) {
+	return BuildRequest(req)
+}
+
+// ParseResponse 见包级函数。
+func (Codec) ParseResponse(status int, body []byte) (protocol.Response, error) {
+	return ParseResponse(status, body)
+}
+
+// BuildResponse 见包级函数。
+func (Codec) BuildResponse(resp protocol.Response) (int, []byte) { return BuildResponse(resp) }
+
+// NewStreamDecoder 见包级函数。
+func (Codec) NewStreamDecoder(r io.Reader) protocol.StreamDecoder { return NewStreamDecoder(r) }
+
+// NewStreamEncoder 见包级函数。
+func (Codec) NewStreamEncoder(w io.Writer) protocol.StreamEncoder { return NewStreamEncoder(w) }
+
+// ParseError 提取 anthropic 错误体中的信息。
+func (Codec) ParseError(status int, body []byte) string { return ParseError(status, body) }
+
+// BuildError 见包级函数。
+func (Codec) BuildError(status int, msg string) []byte { return BuildError(status, msg) }
+
+// ParseError 提取上游错误信息。
+func ParseError(status int, body []byte) string {
+	var e struct {
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &e); err == nil && e.Error.Message != "" {
+		return e.Error.Message
+	}
+	return fmt.Sprintf("anthropic 上游返回 %d", status)
+}
+
+// errorType 把 HTTP 状态映射为 anthropic 错误类型。
+func errorType(status int) string {
+	switch {
+	case status == 400 || status == 413 || status == 422:
+		return "invalid_request_error"
+	case status == 401 || status == 403:
+		return "authentication_error"
+	case status == 404:
+		return "not_found_error"
+	case status == 429:
+		return "rate_limit_error"
+	case status == 529:
+		return "overloaded_error"
+	case status >= 500:
+		return "api_error"
+	default:
+		return "api_error"
+	}
+}
+
+// BuildError 构造 anthropic 格式错误体。
+func BuildError(status int, msg string) []byte {
+	body, _ := json.Marshal(map[string]any{
+		"type": "error",
+		"error": map[string]any{
+			"type":    errorType(status),
+			"message": msg,
+		},
+	})
+	return body
+}

@@ -19,12 +19,12 @@
 
 ## 3. IR 与三协议编解码（internal/protocol*）
 
-- [ ] 3.1 SSE 帧工具 `protocol/sse.go` + 测试：按 `\n\n` 切帧、容忍 `\r\n`、`data:` 多行拼接、流中断在中途时返回已缓冲错误。
-- [ ] 3.2 IR 类型 `protocol/ir.go`（Request/Response/Part/Event，见 design）+ 编解码器接口 `protocol/codec.go`（六件套）。验证：编译通过；接口文档注释完整。
-- [ ] 3.3 anthropic 编解码器 `protocol/anthropic/`（TDD）：黄金样例 `testdata/`（含 system 多段、tool_use/tool_result、base64 图片、cache_control、count_tokens 请求）；`ParseRequest/BuildRequest/ParseResponse/BuildResponse` 往返一致；流式 Decoder 产出 `message_start→content_block_*→message_delta(usage)→message_stop` IR 事件，Encoder 反向合成合法 SSE（含 ping 透传策略：不主动造 ping）。验证：`go test ./internal/protocol/anthropic/`。
-- [ ] 3.4 openaichat 编解码器 `protocol/openaichat/`（TDD）：黄金样例（多轮、`tool_calls`、`role:"tool"`、图片 `image_url` data URL、流式 `choices[].delta` 按 index 合并、`finish_reason` 全枚举）。验证：`go test ./internal/protocol/openaichat/`。
-- [ ] 3.5 openairesponses 编解码器 `protocol/openairesponses/`（TDD）：黄金样例（`instructions`+`input` 条目、`function_call`/`function_call_output`、`store:false`、`stream` 事件 `response.created/output_item.added/output_text.delta/output_item.done/response.completed`、错误体）。验证：`go test ./internal/protocol/openairesponses/`。
-- [ ] 3.6 跨协议黄金样例测试 `protocol/translate_test.go`：四组组合（anthropic↔chat、anthropic↔responses、responses↔chat、responses↔anthropic）请求→IR→构建请求体断言；上游样例响应/SSE→IR→客户端格式断言；`cache_control` 丢弃产生一条警告。验证：`go test ./internal/protocol/...`。
+- [x] 3.1 SSE 帧工具 `protocol/sse.go` + 测试：按 `\n\n` 切帧、容忍 `\r\n`、`data:` 多行拼接、流中断在中途时返回已缓冲错误。
+- [x] 3.2 IR 类型 `protocol/ir.go`（Request/Response/Part/Event，见 design）+ 编解码器接口 `protocol/codec.go`（六件套）。验证：编译通过；接口文档注释完整。
+- [x] 3.3 anthropic 编解码器 `protocol/anthropic/`（TDD）：黄金样例 `testdata/`（含 system 多段、tool_use/tool_result、base64 图片、cache_control、count_tokens 请求）；`ParseRequest/BuildRequest/ParseResponse/BuildResponse` 往返一致；流式 Decoder 产出 `message_start→content_block_*→message_delta(usage)→message_stop` IR 事件，Encoder 反向合成合法 SSE（含 ping 透传策略：不主动造 ping）。验证：`go test ./internal/protocol/anthropic/`。
+- [x] 3.4 openaichat 编解码器 `protocol/openaichat/`（TDD）：黄金样例（多轮、`tool_calls`、`role:"tool"`、图片 `image_url` data URL、流式 `choices[].delta` 按 index 合并、`finish_reason` 全枚举）。验证：`go test ./internal/protocol/openaichat/`。
+- [x] 3.5 openairesponses 编解码器 `protocol/openairesponses/`（TDD）：黄金样例（`instructions`+`input` 条目、`function_call`/`function_call_output`、`store:false`、`stream` 事件 `response.created/output_item.added/output_text.delta/output_item.done/response.completed`、错误体）。验证：`go test ./internal/protocol/openairesponses/`。
+- [x] 3.6 跨协议黄金样例测试 `protocol/translate_test.go`：四组组合（anthropic↔chat、anthropic↔responses、responses↔chat、responses↔anthropic）请求→IR→构建请求体断言；上游样例响应/SSE→IR→客户端格式断言；`cache_control` 丢弃产生一条警告。验证：`go test ./internal/protocol/...`。
 
 ## 4. 供应商注册与熔断（internal/provider）
 
