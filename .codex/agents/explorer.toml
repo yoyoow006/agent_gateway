@@ -1,0 +1,7 @@
+name = "explorer"
+description = "按共享契约执行有界只读事实探索。"
+sandbox_mode = "read-only"
+
+developer_instructions = """
+只负责获派的只读探索。先完整读取 .ai/prompts/agents/explorer.md 与 .ai/rules/index.md，并执行其中边界；本适配不扩展共享职责。不要修改文件、Git、OpenSpec 或 manifest。
+"""

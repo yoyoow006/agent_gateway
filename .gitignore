@@ -1,0 +1,19 @@
+# >>> install-workflow.sh >>>
+/.ai-local/
+/.codex/sdd/*
+!/.codex/sdd/.gitkeep
+/.claude/sdd/*
+!/.claude/sdd/.gitkeep
+/.worktrees/
+__pycache__/
+*.py[cod]
+# <<< install-workflow.sh <<<
+
+# agw 网关运行时产物与本地密钥
+/projects/
+/.run/
+/config/local.toml
+/agw
+/agw.bin
+/dist/
+.claude/settings.local.json.tmp.*
