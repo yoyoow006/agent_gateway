@@ -70,13 +70,14 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto con
 	)
 	for i := range chain {
 		p := chain[i]
+		// GET 拉取仅同协议透传（store=false 时 Codex 不会用到）；
+		// 必须在 Allow() 之前跳过，否则会白白消耗半开探针名额
+		if r.Method == http.MethodGet && p.Protocol != clientProto {
+			continue
+		}
 		br, _ := s.registry.Breaker(p.Name)
 		if br != nil && !br.Allow() {
 			s.logger.Printf("[agw] 供应商 %s 熔断打开，跳过", p.Name)
-			continue
-		}
-		// GET 拉取仅同协议透传（store=false 时 Codex 不会用到）
-		if r.Method == http.MethodGet && p.Protocol != clientProto {
 			continue
 		}
 		anyAttempt = true
@@ -216,12 +217,14 @@ func (s *Server) relaySuccess(w http.ResponseWriter, r *http.Request, clientProt
 	}
 	w.WriteHeader(resp.StatusCode)
 	if p.Protocol == clientProto {
-		copyStream(w, resp.Body)
+		if err := copyStream(w, resp.Body); err != nil {
+			s.logger.Printf("[agw] 供应商 %s 透传流中断: %v", p.Name, err)
+		}
 		return
 	}
 	clientCodec, provCodec := codecFor(clientProto), codecFor(p.Protocol)
 	if isSSE(resp) || r.URL.Query().Get("stream") != "" {
-		translateStream(w, provCodec, clientCodec, resp.Body)
+		translateStream(w, provCodec, clientCodec, resp.Body, p.Name, s.logger)
 		return
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxBody))
@@ -266,11 +269,16 @@ func (s *Server) relayError(w http.ResponseWriter, clientProto, provProto config
 
 // handleCountTokens 优先转发 anthropic 上游，否则本地估算。
 func (s *Server) handleCountTokens(w http.ResponseWriter, r *http.Request, profile *config.Profile) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
+	data, err := io.ReadAll(io.LimitReader(r.Body, maxBody+1))
 	if err != nil {
 		writeError(w, codecFor(config.ProtocolAnthropic), 400, "读取请求体失败")
 		return
 	}
+	if int64(len(data)) > maxBody {
+		writeError(w, codecFor(config.ProtocolAnthropic), 413, fmt.Sprintf("请求体超过 %d MiB 缓冲上限", maxBody>>20))
+		return
+	}
+	body := data
 	for i := range profile.Chain {
 		p := profile.Chain[i]
 		if p.Protocol != config.ProtocolAnthropic {
@@ -396,22 +404,36 @@ func copyStream(dst io.Writer, src io.Reader) error {
 }
 
 // translateStream 上游 SSE → IR → 客户端 SSE。
-func translateStream(w io.Writer, provCodec, clientCodec protocol.Codec, body io.Reader) {
+// 截断（解码错误或 EOF 无结束事件）输出客户端协议的错误帧并终止，
+// 不合成正常收尾——agent 依赖错误信号触发自带重试落到健康供应商。
+func translateStream(w io.Writer, provCodec, clientCodec protocol.Codec, body io.Reader, provName string, logger interface{ Printf(string, ...any) }) {
 	dec := provCodec.NewStreamDecoder(body)
 	enc := clientCodec.NewStreamEncoder(newFlushWriter(w))
+	sawEnd := false
 	for {
 		ev, err := dec.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			// 上游流中断：尽力收尾后终止（客户端重试落到健康供应商）
-			_ = enc.Finish()
+			logger.Printf("[agw] 供应商 %s 流中断: %v", provName, err)
+			_ = enc.Encode(protocol.Event{Kind: protocol.EvStreamError, ErrMessage: "上游流中断: " + err.Error()})
 			return
+		}
+		if ev.Kind == protocol.EvStreamError {
+			logger.Printf("[agw] 供应商 %s 流错误事件: %s", provName, ev.ErrMessage)
+		}
+		if ev.Kind == protocol.EvStreamEnd {
+			sawEnd = true
 		}
 		if encErr := enc.Encode(ev); encErr != nil {
 			return
 		}
+	}
+	if !sawEnd {
+		logger.Printf("[agw] 供应商 %s 流提前结束（无结束事件），按截断处理", provName)
+		_ = enc.Encode(protocol.Event{Kind: protocol.EvStreamError, ErrMessage: "上游流提前结束（截断）"})
+		return
 	}
 	_ = enc.Finish()
 }

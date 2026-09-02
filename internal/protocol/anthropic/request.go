@@ -59,6 +59,8 @@ type wireRequest struct {
 	Model         string          `json:"model"`
 	MaxTokens     int             `json:"max_tokens"`
 	System        json.RawMessage `json:"system,omitempty"`
+	TopK          json.RawMessage `json:"top_k,omitempty"`
+	Metadata      json.RawMessage `json:"metadata,omitempty"`
 	Messages      []wireMessage   `json:"messages"`
 	Temperature   *float64        `json:"temperature,omitempty"`
 	TopP          *float64        `json:"top_p,omitempty"`
@@ -125,6 +127,12 @@ func ParseRequest(body []byte) (protocol.Request, error) {
 	}
 	if cacheDrops > 0 {
 		protocol.NotifyDrop(fmt.Sprintf("cache_control ×%d 仅 anthropic 协议支持，跨协议转发时将被丢弃", cacheDrops))
+	}
+	if len(w.TopK) > 0 {
+		protocol.NotifyDrop("top_k 仅 anthropic 协议支持，跨协议转发时将被丢弃")
+	}
+	if len(w.Metadata) > 0 {
+		protocol.NotifyDrop("metadata 仅 anthropic 协议支持，跨协议转发时将被丢弃")
 	}
 	for _, t := range w.Tools {
 		req.Tools = append(req.Tools, protocol.ToolDef{
@@ -282,7 +290,8 @@ func BuildRequest(req protocol.Request) (string, http.Header, []byte, error) {
 				content, _ := json.Marshal(p.ToolResult)
 				blocks = append(blocks, wireBlock{Type: "tool_result", ToolUseID: p.ToolCallID, Content: content, IsError: p.ToolResultIsErr})
 			case protocol.KindThinking:
-				blocks = append(blocks, wireBlock{Type: "thinking", Thinking: p.Text})
+				// 思考历史无 signature，回传会被扩展思考模型拒绝——与 responses 侧策略一致不回传
+				protocol.NotifyDrop("thinking 历史块未回传上游（无 signature）")
 			}
 		}
 		if len(blocks) == 0 {

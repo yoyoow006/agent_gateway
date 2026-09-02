@@ -57,7 +57,25 @@ func pidAlive(pid int) bool {
 	return proc.Signal(syscall.Signal(0)) == nil
 }
 
+// selfPath 可注入的可执行文件路径（测试替换）。
+var selfPath = func() (string, error) { return os.Executable() }
+
+// logTail 返回日志最后几行（错误提示用）。
+func logTail(root string, n int) string {
+	data, err := os.ReadFile(logPath(root))
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, " | ")
+}
+
 // StartGateway 分离启动 `agw serve`；已运行则报错。返回 pid。
+// 通过 Wait 通道判定子进程是否站稳（僵尸进程对 signal-0 探测是存活的，
+// 不能用 pidAlive 判断启动成败——端口占用时子进程会秒退成僵尸）。
 func StartGateway(root string, cfgListen string) (int, error) {
 	if pidAlive(readPid(root)) {
 		return 0, fmt.Errorf("网关已在运行（pid %d）；如需重启先 agw stop", readPid(root))
@@ -70,7 +88,7 @@ func StartGateway(root string, cfgListen string) (int, error) {
 		return 0, err
 	}
 	defer logFile.Close()
-	self, err := os.Executable()
+	self, err := selfPath()
 	if err != nil {
 		return 0, err
 	}
@@ -82,16 +100,23 @@ func StartGateway(root string, cfgListen string) (int, error) {
 		return 0, err
 	}
 	pid := cmd.Process.Pid
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- cmd.Wait() }() // 同时负责收尸，避免僵尸
 	if err := os.WriteFile(pidPath(root), []byte(strconv.Itoa(pid)), 0o600); err != nil {
 		return pid, err
 	}
-	// 等待进程站稳（启动失败如端口占用会在极短时间内退出）
-	time.Sleep(300 * time.Millisecond)
-	if !pidAlive(pid) {
+	// 观察窗口：启动失败（端口占用等）会在窗口内退出
+	select {
+	case <-waitCh:
 		os.Remove(pidPath(root))
+		tail := logTail(root, 3)
+		if tail != "" {
+			return pid, fmt.Errorf("网关启动失败：%s（完整日志 %s）", tail, logPath(root))
+		}
 		return pid, fmt.Errorf("网关启动后立即退出，请查看日志: %s", logPath(root))
+	case <-time.After(700 * time.Millisecond):
+		return pid, nil
 	}
-	return pid, nil
 }
 
 func runStart(cmd *cobra.Command, args []string) {

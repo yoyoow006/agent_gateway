@@ -152,6 +152,6 @@ bash scripts/validate-workflow.sh --fast                 # 工作流校验
 
 ## 已知边界
 
-- Codex 的 `GET /v1/responses/{id}` 拉取仅同协议透传（禁用响应存储后 Codex 不使用该路径）。
+- Codex 的 `GET /v1/responses/{id}` 单响应拉取**未路由**（返回 404）；禁用响应存储后 Codex 不使用该路径，每请求自包含全量上下文。
 - `count_tokens` 优先转发 anthropic 上游；不可用时返回本地粗估（字节/4），误差只影响上下文预算判断。
 - v1 非目标：TUI/Web 控制台、主动拨测、负载均衡、Windows、计费统计、音视频多模态。

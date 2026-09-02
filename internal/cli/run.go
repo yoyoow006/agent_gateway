@@ -20,8 +20,9 @@ var (
 	runCmd = &cobra.Command{
 		Use:   "run <claude|codex> [--project 名] [-- agent 参数...]",
 		Short: "在项目上下文中启动 agent（注入项目令牌，exec 替换进程）",
-		Args:  cobra.ExactArgs(1),
-		Run:   runAgent,
+		// `--` 之后的参数会被并入 positional args，不能再用 ExactArgs(1)
+		Args: cobra.MinimumNArgs(1),
+		Run:  runAgent,
 	}
 )
 
@@ -54,6 +55,9 @@ func runInstall(cmd *cobra.Command, args []string) {
 	}
 }
 
+// execAgent 可注入的 exec 入口（测试替换）。
+var execAgent = agent.Exec
+
 func runAgent(cmd *cobra.Command, args []string) {
 	kind := args[0]
 	if kind != agent.KindClaude && kind != agent.KindCodex {
@@ -67,7 +71,7 @@ func runAgent(cmd *cobra.Command, args []string) {
 		fatalf("%v", err)
 	}
 	fmt.Fprintf(os.Stderr, "agw: 启动 %s（项目=%s 目录=%s）\n", kind, project, dir)
-	if err := agent.Exec(env, dir, argv); err != nil {
+	if err := execAgent(env, dir, argv); err != nil {
 		fatalf("%v", err)
 	}
 }

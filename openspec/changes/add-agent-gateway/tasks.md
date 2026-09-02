@@ -68,7 +68,7 @@
 
 ## 11. 端到端与文档
 
-- [x] 11.1 e2e 测试 `e2e_test.go`：进程内起完整网关 + 双假上游（其一前 2 次 529 后恢复）：anthropic 与 responses 两种客户端各走通一次 failover；熔断冷却后（注入时钟）原上游恢复接流；SSE 首字节延迟断言（无聚合缓冲）。验证：`go test ./internal/gateway/ -run E2E -race`。
+- [x] 11.1 e2e 测试 `e2e_test.go`：进程内起完整网关 + 双假上游（其一前 2 次 529 后恢复）：anthropic 与 responses 两种客户端各走通一次 failover；SSE 首字节延迟断言（无聚合缓冲）。熔断"冷却到期后原上游恢复接流"经 Server 时钟注入在 `TestE2EBreakerCooldownRecovery`（review_fix_test.go）覆盖，熔断状态机其余语义在 internal/provider 单元级覆盖。验证：`go test ./internal/gateway/ -run E2E -race`。
 - [x] 11.2 `README.md`：快速开始（init→provider add→start→install→run）、配置参考（三层合并/协议/model_map/超时）、翻译矩阵与降级表、failover 与熔断语义、安全说明（密钥/令牌/绑定）、回滚（install 备份、git 分支）。验证：人工核对命令可复制执行、与实现一致。
 - [x] 11.3 全量验证收口：`go build ./... && go vet ./... && go test -race ./...` 全绿、`gofmt -l .` 为空、`bash scripts/validate-workflow.sh --fast` PASS、`openspec validate add-agent-gateway --strict --no-interactive`（CLI 缺失记录跳过）；勾选全部任务、proposal 状态推进到`待验证`，进入 verify 流程。
 

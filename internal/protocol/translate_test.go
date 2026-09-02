@@ -293,3 +293,44 @@ func TestCacheControlDropWarning(t *testing.T) {
 		t.Errorf("期望 cache_control 丢弃告警，得到 %v", warnings)
 	}
 }
+
+// MIN-05 回归：previous_response_id / 未知 input 条目触发降级告警。
+func TestDropNotificationsForResponsesFields(t *testing.T) {
+	var warnings []string
+	prev := protocol.DropHook
+	protocol.DropHook = func(detail string) { warnings = append(warnings, detail) }
+	defer func() { protocol.DropHook = prev }()
+
+	body := []byte(`{"model":"m","previous_response_id":"resp_old","input":[{"type":"message","role":"user","content":"hi"},{"type":"web_search_call","id":"ws_1"}]}`)
+	if _, err := responsesCodec.ParseRequest(body); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(warnings, "\n")
+	if !strings.Contains(joined, "previous_response_id") {
+		t.Errorf("previous_response_id 丢弃应有告警: %v", warnings)
+	}
+	if !strings.Contains(joined, "web_search_call") {
+		t.Errorf("未知条目类型丢弃应有告警: %v", warnings)
+	}
+}
+
+// MIN-06 回归：anthropic 构建请求时 thinking 历史块不回传（无 signature）。
+func TestAnthropicBuildDropsThinkingHistory(t *testing.T) {
+	req := protocol.Request{
+		Model: "m", MaxTokens: 10,
+		Turns: []protocol.Turn{
+			{Role: "assistant", Parts: []protocol.Part{protocol.Thinking("思考中"), protocol.ToolUse("t1", "f", "{}")}},
+			{Role: "user", Parts: []protocol.Part{protocol.ToolResult("t1", "ok", false)}},
+		},
+	}
+	_, _, body, err := anthropicCodec.BuildRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), `"thinking"`) {
+		t.Errorf("thinking 历史不应回传上游: %s", body)
+	}
+	if !strings.Contains(string(body), `"tool_use"`) || !strings.Contains(string(body), `"tool_result"`) {
+		t.Errorf("工具块应保留: %s", body)
+	}
+}

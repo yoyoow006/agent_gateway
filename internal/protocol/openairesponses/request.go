@@ -47,16 +47,17 @@ type wireTool struct {
 }
 
 type wireRequest struct {
-	Model           string          `json:"model"`
-	Instructions    string          `json:"instructions,omitempty"`
-	Input           json.RawMessage `json:"input"` // string 或 items
-	Tools           []wireTool      `json:"tools,omitempty"`
-	ToolChoice      json.RawMessage `json:"tool_choice,omitempty"`
-	MaxOutputTokens int             `json:"max_output_tokens,omitempty"`
-	Temperature     *float64        `json:"temperature,omitempty"`
-	TopP            *float64        `json:"top_p,omitempty"`
-	Stream          bool            `json:"stream,omitempty"`
-	Store           *bool           `json:"store,omitempty"`
+	Model              string          `json:"model"`
+	Instructions       string          `json:"instructions,omitempty"`
+	Input              json.RawMessage `json:"input"` // string 或 items
+	PreviousResponseID string          `json:"previous_response_id,omitempty"`
+	Tools              []wireTool      `json:"tools,omitempty"`
+	ToolChoice         json.RawMessage `json:"tool_choice,omitempty"`
+	MaxOutputTokens    int             `json:"max_output_tokens,omitempty"`
+	Temperature        *float64        `json:"temperature,omitempty"`
+	TopP               *float64        `json:"top_p,omitempty"`
+	Stream             bool            `json:"stream,omitempty"`
+	Store              *bool           `json:"store,omitempty"`
 }
 
 // ParseRequest 解析 Responses 请求为 IR。
@@ -85,6 +86,9 @@ func ParseRequest(body []byte) (protocol.Request, error) {
 		if err := json.Unmarshal(w.Input, &items); err != nil {
 			return protocol.Request{}, fmt.Errorf("解析 responses input: %w", err)
 		}
+	}
+	if w.PreviousResponseID != "" {
+		protocol.NotifyDrop("previous_response_id 被丢弃（agw 无状态路由，请求必须自包含上下文；请确认客户端已禁用响应存储）")
 	}
 	for _, it := range items {
 		switch it.Type {
@@ -128,6 +132,8 @@ func ParseRequest(body []byte) (protocol.Request, error) {
 					protocol.Thinking(sb.String()),
 				}})
 			}
+		default:
+			protocol.NotifyDrop("responses input 未知条目类型 " + it.Type + " 被跳过")
 		}
 	}
 	// 相邻同角色 input 条目（如 function_call_output + user 消息）合并为单轮。

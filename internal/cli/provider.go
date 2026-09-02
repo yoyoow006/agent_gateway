@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"agent_gateway/internal/config"
+	"agent_gateway/internal/protocol/anthropic"
 
 	"github.com/spf13/cobra"
 )
@@ -169,6 +170,7 @@ func ProbeProvider(p *config.Provider) (time.Duration, error) {
 	}
 	if p.Protocol == config.ProtocolAnthropic {
 		req.Header.Set("X-Api-Key", key)
+		req.Header.Set("Anthropic-Version", anthropic.APIVersion)
 	} else {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}

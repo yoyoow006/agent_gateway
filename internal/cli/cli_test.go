@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 
 	"agent_gateway/internal/config"
@@ -220,5 +221,116 @@ func TestRedact(t *testing.T) {
 		if in == "普通文本无密钥" && got != in {
 			t.Errorf("无密钥文本被改动: %q", got)
 		}
+	}
+}
+
+// FWD-01 回归：`--` 之后的参数不被 cobra 参数校验拦截。
+func TestRunDashDashPassthrough(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		"config/local.toml":   "[gateway]\ndefault_token = \"agw-g\"\n",
+		"projects/demo/.keep": "",
+	})
+	var captured struct {
+		called bool
+		argv   []string
+		env    map[string]string
+		dir    string
+	}
+	prev := execAgent
+	execAgent = func(env map[string]string, dir string, argv []string) error {
+		captured.called, captured.argv, captured.env, captured.dir = true, argv, env, dir
+		return nil
+	}
+	defer func() { execAgent = prev }()
+
+	// 模拟 os.Args 含 `--`（extractAgentArgs 依据 os.Args）
+	oldArgs := os.Args
+	os.Args = []string{"agw", "run", "--root", root, "claude", "--project", "demo", "--", "--model", "x"}
+	defer func() { os.Args = oldArgs }()
+
+	cmd := NewRootCmd()
+	cmd.SetArgs([]string{"run", "--root", root, "claude", "--project", "demo", "--", "--model", "x"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("命令应执行成功: %v", err)
+	}
+	if !captured.called {
+		t.Fatal("execAgent 未被调用（参数校验拦截或提前失败）")
+	}
+	want := []string{"claude", "--model", "x"}
+	if len(captured.argv) != len(want) {
+		t.Fatalf("argv = %v want %v", captured.argv, want)
+	}
+	for i := range want {
+		if captured.argv[i] != want[i] {
+			t.Fatalf("argv = %v want %v", captured.argv, want)
+		}
+	}
+	if captured.env["ANTHROPIC_AUTH_TOKEN"] != "agw-g" {
+		t.Errorf("env 令牌 = %v", captured.env)
+	}
+}
+
+// LFC-01 回归：启动失败（子进程秒退）必须报错而非误报成功。
+func TestStartGatewayDetectsImmediateExit(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(runDir(root), 0o755)
+	// 崩溃脚本：写一行"日志"然后退出 1
+	failScript := filepath.Join(root, "fail.sh")
+	os.WriteFile(failScript, []byte("#!/bin/sh\necho 'listen tcp: bind: address already in use'\nexit 1\n"), 0o755)
+	prev := selfPath
+	selfPath = func() (string, error) { return failScript, nil }
+	defer func() { selfPath = prev }()
+
+	_, err := StartGateway(root, "127.0.0.1:8787")
+	if err == nil {
+		t.Fatal("子进程秒退必须报错")
+	}
+	if !strings.Contains(err.Error(), "address already in use") {
+		t.Errorf("错误应含日志尾部（占用原因）: %v", err)
+	}
+	if _, statErr := os.Stat(pidPath(root)); statErr == nil {
+		t.Error("失败后 pidfile 应被清理")
+	}
+}
+
+// LFC-01 补充：正常存活路径仍报成功并清理。
+func TestStartGatewayAlivePath(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(runDir(root), 0o755)
+	okScript := filepath.Join(root, "alive.sh")
+	os.WriteFile(okScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755)
+	prev := selfPath
+	selfPath = func() (string, error) { return okScript, nil }
+	defer func() { selfPath = prev }()
+
+	pid, err := StartGateway(root, "127.0.0.1:8787")
+	if err != nil {
+		t.Fatalf("存活路径应成功: %v", err)
+	}
+	defer func() {
+		if p, e := os.FindProcess(pid); e == nil {
+			p.Signal(syscall.SIGKILL)
+		}
+	}()
+	if readPid(root) != pid {
+		t.Errorf("pidfile = %d want %d", readPid(root), pid)
+	}
+}
+
+// MIN-02 回归：anthropic 探测带 anthropic-version。
+func TestProbeAnthropicVersionHeader(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Anthropic-Version") == "" {
+			t.Error("探测请求缺 anthropic-version")
+		}
+		if r.Header.Get("X-Api-Key") != "sk-a" {
+			t.Error("探测请求缺 x-api-key")
+		}
+		w.Write([]byte(`{}`))
+	}))
+	defer up.Close()
+	p := &config.Provider{Name: "a", Protocol: config.ProtocolAnthropic, BaseURL: up.URL, APIKey: "sk-a"}
+	if _, err := ProbeProvider(p); err != nil {
+		t.Fatal(err)
 	}
 }

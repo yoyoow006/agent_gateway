@@ -169,7 +169,8 @@ func NewRegistry() *Registry {
 	return &Registry{entries: map[string]*entry{}}
 }
 
-// Upsert 注册或更新供应商配置（保留计数与熔断状态）。
+// Upsert 注册或更新供应商配置（保留计数与既有熔断器状态；
+// 参数变化需重启网关生效——热重载不应复位正在冷却的熔断）。
 func (r *Registry) Upsert(name string, cfg Config, now func() time.Time) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -178,7 +179,9 @@ func (r *Registry) Upsert(name string, cfg Config, now func() time.Time) {
 		e = &entry{}
 		r.entries[name] = e
 	}
-	e.breaker = NewBreaker(cfg, now)
+	if e.breaker == nil {
+		e.breaker = NewBreaker(cfg, now)
+	}
 }
 
 // Remove 移除供应商。

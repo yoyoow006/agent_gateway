@@ -27,6 +27,7 @@ type Server struct {
 	reload   func() (*config.Config, error)
 	logger   *log.Logger
 	started  time.Time
+	now      func() time.Time // 熔断时钟（测试注入）
 }
 
 // New 构造网关；reload 为 nil 时 /__agw/reload 返回未配置。
@@ -41,23 +42,31 @@ func New(cfg *config.Config, reload func() (*config.Config, error), logger *log.
 		reload:   reload,
 		logger:   logger,
 		started:  time.Now(),
+		now:      time.Now,
 	}
 	s.syncBreakers()
 	return s
 }
 
-// syncBreakers 同步注册表与当前配置的供应商集合（保留既有熔断状态）。
+// syncBreakers 同步注册表与当前配置的供应商集合（保留既有熔断状态），
+// 并清理已移除供应商的 HTTP 客户端缓存。
 func (s *Server) syncBreakers() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	names := map[string]bool{}
 	for _, p := range s.cfg.Providers {
 		names[p.Name] = true
-		s.registry.Upsert(p.Name, provider.DefaultConfig(), nil)
+		// 动态读 s.now 的闭包：测试可在 New 之后替换时钟
+		s.registry.Upsert(p.Name, provider.DefaultConfig(), func() time.Time { return s.now() })
 	}
 	for _, snap := range s.registry.Snapshot() {
 		if !names[snap.Name] {
 			s.registry.Remove(snap.Name)
+		}
+	}
+	for name := range s.clients {
+		if !names[name] {
+			delete(s.clients, name)
 		}
 	}
 }
@@ -139,7 +148,12 @@ func (s *Server) withAuth(clientProto config.Protocol, next func(http.ResponseWr
 		var profile *config.Profile
 		if token != "" {
 			if project, ok := cfg.TokenProject(token); ok {
-				profile, _ = cfg.ResolveProfile(project)
+				p, err := cfg.ResolveProfile(project)
+				if err != nil {
+					writeError(w, codecFor(clientProto), 503, "项目档案配置错误: "+err.Error())
+					return
+				}
+				profile = p
 			}
 		}
 		if profile == nil {
@@ -150,10 +164,11 @@ func (s *Server) withAuth(clientProto config.Protocol, next func(http.ResponseWr
 	}
 }
 
-// admin 要求 admin 令牌。
+// admin 要求 admin 令牌；AdminToken 为空（如配置被清空后重载）时一律拒绝。
 func (s *Server) admin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if clientToken(r) != s.Config().AdminToken {
+		adminToken := s.Config().AdminToken
+		if adminToken == "" || clientToken(r) != adminToken {
 			w.WriteHeader(401)
 			io.WriteString(w, `{"error":"admin token required"}`)
 			return
