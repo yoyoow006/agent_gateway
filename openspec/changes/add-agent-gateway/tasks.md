@@ -8,14 +8,14 @@
 
 ## 1. 工程基线
 
-- [ ] 1.1 git 基线与忽略规则：更新 `.gitignore`（追加 `/projects/`、`/.run/`、`/config/local.toml`、`/agw`、`/dist/`），`git init && git add -A && git commit -m "chore: workflow scaffold baseline"`，创建并切换 `feature/add-agent-gateway`。验证：`git status` 干净、`git log --oneline` 有基线提交、当前分支为 feature 分支。
-- [ ] 1.2 Go 模块与 CLI 骨架：确认 `go version` ≥1.22；`go mod init agent_gateway`；引入 `spf13/cobra`、`BurntSushi/toml`；创建 `cmd/agw/main.go`（cobra 根命令 `agw`，暂无子命令）与 `internal/{cli,config,gateway,provider,protocol,agent,workspace}` 空包（doc.go 占位）。验证：`go build ./...` 通过、`go run ./cmd/agw --help` 输出帮助、`gofmt -l .` 与 `go vet ./...` 干净。
+- [x] 1.1 git 基线与忽略规则：更新 `.gitignore`（追加 `/projects/`、`/.run/`、`/config/local.toml`、`/agw`、`/dist/`），`git init && git add -A && git commit -m "chore: workflow scaffold baseline"`，创建并切换 `feature/add-agent-gateway`。验证：`git status` 干净、`git log --oneline` 有基线提交、当前分支为 feature 分支。
+- [x] 1.2 Go 模块与 CLI 骨架：确认 `go version` ≥1.22；`go mod init agent_gateway`；引入 `spf13/cobra`、`BurntSushi/toml`；创建 `cmd/agw/main.go`（cobra 根命令 `agw`，暂无子命令）与 `internal/{cli,config,gateway,provider,protocol,agent,workspace}` 空包（doc.go 占位）。验证：`go build ./...` 通过、`go run ./cmd/agw --help` 输出帮助、`gofmt -l .` 与 `go vet ./...` 干净。
 
 ## 2. 配置层（internal/config）
 
-- [ ] 2.1 先写失败测试 `config_test.go`：三层合并优先级（项目覆盖 local、local 覆盖 default）、`env:VAR` 密钥解析（含缺失环境变量报错）、未知字段不致解析失败。
-- [ ] 2.2 实现 `config.go`：`Config{Gateway, Providers[], Projects map[string]ProjectProfile}`、`Provider{Name, Protocol(enum: anthropic|openai-chat|openai-responses), BaseURL, APIKey, APIKeyEnv, Priority, Enabled, Preferred, ModelMap, Headers, ConnectTimeout, FirstByteTimeout}`；`Load(repoRoot)` 深合并三层；`SaveLocal` 以 0600 写回；`NewToken()`（crypto/rand 32B hex）及令牌→项目索引。验证：`go test ./internal/config/` 全绿（含 2.1）。
-- [ ] 2.3 生成 `config/default.toml`（提交版示例：监听 `127.0.0.1:8787`、注释齐全的 provider 模板、无密钥）。验证：以 default.toml 单独 Load 成功且无明文密钥字段。
+- [x] 2.1 先写失败测试 `config_test.go`：三层合并优先级（项目覆盖 local、local 覆盖 default）、`env:VAR` 密钥解析（含缺失环境变量报错）、未知字段不致解析失败。
+- [x] 2.2 实现 `config.go`：`Config{Gateway, Providers[], Projects map[string]ProjectProfile}`、`Provider{Name, Protocol(enum: anthropic|openai-chat|openai-responses), BaseURL, APIKey, APIKeyEnv, Priority, Enabled, Preferred, ModelMap, Headers, ConnectTimeout, FirstByteTimeout}`；`Load(repoRoot)` 深合并三层；`SaveLocal` 以 0600 写回；`NewToken()`（crypto/rand 32B hex）及令牌→项目索引。验证：`go test ./internal/config/` 全绿（含 2.1）。
+- [x] 2.3 生成 `config/default.toml`（提交版示例：监听 `127.0.0.1:8787`、注释齐全的 provider 模板、无密钥）。验证：以 default.toml 单独 Load 成功且无明文密钥字段。
 
 ## 3. IR 与三协议编解码（internal/protocol*）
 
