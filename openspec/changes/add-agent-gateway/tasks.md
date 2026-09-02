@@ -57,14 +57,14 @@
 
 ## 9. agent 适配（internal/agent）
 
-- [ ] 9.1 先写失败测试：settings.json 安全合并（保留用户未知键、仅更新 `env.ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN`、生成时间戳备份、损坏 JSON 拒绝写入）；config.toml 合并（新增 `model_providers.agw`、`model_provider="agw"`、禁用响应存储键、保留用户 provider、备份）；npm/git 探测（可注入 runner，缺失时返回指引错误）。
-- [ ] 9.2 实现 `install.go`：`InstallClaude`（npm 探测→`npm i -g @anthropic-ai/claude-code`→合并 settings.json→输出回滚指引）；`InstallCodex`（npm 安装→合并 `~/.codex/config.toml`，`wire_api="responses"`、`env_key="AGW_API_KEY"`；实现时对照已装 codex 核实响应存储开关键名，README 记录）。验证：`go test ./internal/agent/ -run Install`。
-- [ ] 9.3 实现 `run.go`：项目解析（`--project` 或 cwd 位于 projects/ 下推断，未知名牌列出可用项目）、chdir、注入环境（claude：BASE_URL/AUTH_TOKEN=项目令牌；codex：`AGW_API_KEY`=项目令牌）、`syscall.Exec` 替换进程；`--` 后参数透传。TDD：环境/目录/参数组装断言（exec 本体用可注入命令验证）。验证：`go test ./internal/agent/ -run Run`。
+- [x] 9.1 先写失败测试：settings.json 安全合并（保留用户未知键、仅更新 `env.ANTHROPIC_BASE_URL/ANTHROPIC_AUTH_TOKEN`、生成时间戳备份、损坏 JSON 拒绝写入）；config.toml 合并（新增 `model_providers.agw`、`model_provider="agw"`、禁用响应存储键、保留用户 provider、备份）；npm/git 探测（可注入 runner，缺失时返回指引错误）。
+- [x] 9.2 实现 `install.go`：`InstallClaude`（npm 探测→`npm i -g @anthropic-ai/claude-code`→合并 settings.json→输出回滚指引）；`InstallCodex`（npm 安装→合并 `~/.codex/config.toml`，`wire_api="responses"`、`env_key="AGW_API_KEY"`；实现时对照已装 codex 核实响应存储开关键名，README 记录）。验证：`go test ./internal/agent/ -run Install`。
+- [x] 9.3 实现 `run.go`：项目解析（`--project` 或 cwd 位于 projects/ 下推断，未知名牌列出可用项目）、chdir、注入环境（claude：BASE_URL/AUTH_TOKEN=项目令牌；codex：`AGW_API_KEY`=项目令牌）、`syscall.Exec` 替换进程；`--` 后参数透传。TDD：环境/目录/参数组装断言（exec 本体用可注入命令验证）。验证：`go test ./internal/agent/ -run Run`。
 
 ## 10. 项目工作区（internal/workspace）
 
-- [ ] 10.1 先写失败测试：名称校验（`^[a-z0-9][a-z0-9_-]*$`）、创建（目录+git init+agw.toml 模板+令牌入 local 配置）、已存在报错不覆盖、list（名称/分支/脏状态/覆盖摘要）。
-- [ ] 10.2 实现 `project.go`：`New/List`，git 经可注入 runner（缺失告警跳过），模板含注释示例。验证：`go test ./internal/workspace/`。
+- [x] 10.1 先写失败测试：名称校验（`^[a-z0-9][a-z0-9_-]*$`）、创建（目录+git init+agw.toml 模板+令牌入 local 配置）、已存在报错不覆盖、list（名称/分支/脏状态/覆盖摘要）。
+- [x] 10.2 实现 `project.go`：`New/List`，git 经可注入 runner（缺失告警跳过），模板含注释示例。验证：`go test ./internal/workspace/`。
 
 ## 11. 端到端与文档
 
