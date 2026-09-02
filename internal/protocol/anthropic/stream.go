@@ -313,10 +313,15 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 	case protocol.EvBlockStop:
 		return e.sendJSON("content_block_stop", map[string]any{"type": "content_block_stop", "index": ev.Index})
 	case protocol.EvStreamEnd:
+		usage := map[string]any{"output_tokens": ev.Usage.Output}
+		if ev.Usage.Input > 0 {
+			// 部分上游（如 responses）只在流尾给出输入用量，此处补记
+			usage["input_tokens"] = ev.Usage.Input
+		}
 		if err := e.sendJSON("message_delta", map[string]any{
 			"type":  "message_delta",
 			"delta": map[string]any{"stop_reason": stopToAnthropic(ev.StopReason), "stop_sequence": nil},
-			"usage": map[string]any{"output_tokens": ev.Usage.Output},
+			"usage": usage,
 		}); err != nil {
 			return err
 		}

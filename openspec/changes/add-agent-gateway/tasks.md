@@ -39,14 +39,14 @@
 
 ## 6. failover 引擎（internal/gateway）
 
-- [ ] 6.1 先写失败测试 `failover_test.go`：双假上游（第一家 529/429/连接拒绝/首字节超时）→ 第二家成功且客户端无感；全链失败返回最后一次错误（含 Retry-After）；熔断打开的供应商零连接；粘性首选优先于优先级数字；>64MiB 请求体 413；成功/失败计入熔断与指标。
-- [ ] 6.2 实现 `failover.go`：内存缓冲请求体（上限可配）、可重试分类（网络错误/408/429/5xx/529）、候选排序（preferred→priority、跳过 open）、每家尝试（透传或翻译）、失败换家重放、熔断与指标记录。验证：`go test -race ./internal/gateway/`。
+- [x] 6.1 先写失败测试 `failover_test.go`：双假上游（第一家 529/429/连接拒绝/首字节超时）→ 第二家成功且客户端无感；全链失败返回最后一次错误（含 Retry-After）；熔断打开的供应商零连接；粘性首选优先于优先级数字；>64MiB 请求体 413；成功/失败计入熔断与指标。
+- [x] 6.2 实现 `failover.go`：内存缓冲请求体（上限可配）、可重试分类（网络错误/408/429/5xx/529）、候选排序（preferred→priority、跳过 open）、每家尝试（透传或翻译）、失败换家重放、熔断与指标记录。验证：`go test -race ./internal/gateway/`。
 
 ## 7. 翻译管线集成（internal/gateway）
 
-- [ ] 7.1 先写失败测试 `translate_test.go`（每组合一条流式 e2e）：anthropic 客户端→chat 上游、anthropic→responses、responses(含工具)→chat、responses→anthropic；断言客户端收到自身协议的合法 SSE 事件序列、工具参数增量拼接正确、usage/stop_reason 映射正确；上游 401 全链失败后错误体已转成客户端协议格式。
-- [ ] 7.2 实现 `translate.go`：按（客户端协议, 供应商协议）选择编解码器对；`model_map` 在 BuildRequest 前重写 IR.Model；不可映射块 400 明确错误；流式 Decoder→Encoder 直连逐事件转换。验证：`go test ./internal/gateway/`。
-- [ ] 7.3 `count_tokens` 兜底：链内有 anthropic 上游则转发（同 6.2 failover），全 404/405 或无则本地估算（字节/4）返回 `{input_tokens:N}`。TDD 覆盖两种档案。验证：`go test ./internal/gateway/ -run CountTokens`。
+- [x] 7.1 先写失败测试 `translate_test.go`（每组合一条流式 e2e）：anthropic 客户端→chat 上游、anthropic→responses、responses(含工具)→chat、responses→anthropic；断言客户端收到自身协议的合法 SSE 事件序列、工具参数增量拼接正确、usage/stop_reason 映射正确；上游 401 全链失败后错误体已转成客户端协议格式。
+- [x] 7.2 实现 `translate.go`：按（客户端协议, 供应商协议）选择编解码器对；`model_map` 在 BuildRequest 前重写 IR.Model；不可映射块 400 明确错误；流式 Decoder→Encoder 直连逐事件转换。验证：`go test ./internal/gateway/`。
+- [x] 7.3 `count_tokens` 兜底：链内有 anthropic 上游则转发（同 6.2 failover），全 404/405 或无则本地估算（字节/4）返回 `{input_tokens:N}`。TDD 覆盖两种档案。验证：`go test ./internal/gateway/ -run CountTokens`。
 
 ## 8. 运维 CLI（internal/cli）
 

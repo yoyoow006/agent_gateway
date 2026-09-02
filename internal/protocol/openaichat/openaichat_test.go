@@ -175,12 +175,12 @@ func TestStreamDecoder(t *testing.T) {
 	for _, e := range evs {
 		kinds += string(e.Kind) + ","
 	}
-	// 文本块懒开启 → 文本增量×2 → 工具块开启前关闭文本块 → 工具增量×2 → 收尾关闭 → 结束
-	want := "block_start,text_delta,text_delta,block_stop,block_start,tool_call_delta,tool_call_delta,block_stop,stream_end,"
+	// 首个 chunk 合成起始事件 → 文本块懒开启 → 增量×2 → 工具块前关闭文本块 → 工具增量×2 → 收尾关闭 → 结束
+	want := "stream_start,block_start,text_delta,text_delta,block_stop,block_start,tool_call_delta,tool_call_delta,block_stop,stream_end,"
 	if kinds != want {
 		t.Fatalf("kinds = %s\nwant %s", kinds, want)
 	}
-	toolStart := evs[4]
+	toolStart := evs[5]
 	if toolStart.Block.Kind != protocol.KindToolUse || toolStart.Block.ToolCallID != "call_03" || toolStart.Block.ToolName != "get_weather" {
 		t.Errorf("tool start = %+v", toolStart)
 	}

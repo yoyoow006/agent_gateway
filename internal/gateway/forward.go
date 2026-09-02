@@ -61,11 +61,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto con
 		return
 	}
 	var (
-		lastStatus int
+		lastStatus int // 最后一个返回真实 HTTP 错误的供应商
 		lastBody   []byte
 		lastHdr    http.Header
 		lastProto  config.Protocol
 		lastTried  bool
+		anyAttempt bool // 有供应商被实际尝试过（含传输失败）
 	)
 	for i := range chain {
 		p := chain[i]
@@ -78,14 +79,13 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto con
 		if r.Method == http.MethodGet && p.Protocol != clientProto {
 			continue
 		}
+		anyAttempt = true
 		s.registry.RecordRequest(p.Name)
 		resp, err := s.attempt(r, clientProto, profile, p, body)
 		if err != nil {
 			s.registry.RecordFailure(p.Name, err.Error())
 			s.logger.Printf("[agw] 供应商 %s 尝试失败: %v", p.Name, err)
-			lastStatus, lastBody, lastProto, lastTried = 502, nil, p.Protocol, true
-			lastHdr = nil
-			continue
+			continue // 传输失败无上游响应，不覆盖已有真实错误
 		}
 		if resp.StatusCode >= 400 {
 			errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -108,6 +108,10 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto con
 	}
 	if lastTried {
 		s.relayError(w, clientProto, lastProto, lastStatus, lastBody, lastHdr)
+		return
+	}
+	if anyAttempt {
+		s.relayError(w, clientProto, clientProto, 502, nil, nil)
 		return
 	}
 	writeError(w, clientCodec, 503, "全部供应商处于熔断冷却中")

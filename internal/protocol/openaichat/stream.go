@@ -139,6 +139,7 @@ func BuildResponse(resp protocol.Response) (int, []byte) {
 
 type streamChunk struct {
 	ID      string `json:"id"`
+	Model   string `json:"model"`
 	Choices []struct {
 		Index int `json:"index"`
 		Delta struct {
@@ -155,6 +156,7 @@ type streamChunk struct {
 type streamDecoder struct {
 	r       *protocol.SSEReader
 	pending []protocol.Event
+	started bool
 	nextIdx int
 	curIdx  int // 当前打开的块索引，-1 表示无
 	curKind protocol.PartKind
@@ -202,6 +204,11 @@ func (d *streamDecoder) Next() (protocol.Event, error) {
 		var chunk streamChunk
 		if err := json.Unmarshal([]byte(frame.Data), &chunk); err != nil {
 			continue // 容忍中转站私有帧
+		}
+		// chat 协议无起始事件：在首个 chunk 合成 EvStreamStart（携带 model）
+		if !d.started {
+			d.started = true
+			d.pending = append(d.pending, protocol.Event{Kind: protocol.EvStreamStart, Model: chunk.Model})
 		}
 		if chunk.Usage != nil {
 			d.usage = chunk.Usage

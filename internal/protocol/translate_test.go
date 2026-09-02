@@ -216,8 +216,7 @@ func TestTranslateStreamPairs(t *testing.T) {
 			clientEnc: openaichat.NewStreamEncoder,
 			clientDec: openaichat.NewStreamDecoder,
 			upstream:  anthropicSSE,
-			// chat 协议无 stream_start 事件，回环序列自然少这一项
-			wantKinds: "block_start,text_delta,block_stop,stream_end,",
+			wantKinds: "stream_start,block_start,text_delta,block_stop,stream_end,",
 		},
 		{
 			name:      "anthropic上游→responses客户端",
@@ -233,7 +232,7 @@ func TestTranslateStreamPairs(t *testing.T) {
 			clientEnc: anthropic.NewStreamEncoder,
 			clientDec: anthropic.NewStreamDecoder,
 			upstream:  chatSSE,
-			wantKinds: "block_start,text_delta,block_stop,stream_end,",
+			wantKinds: "stream_start,block_start,text_delta,block_stop,stream_end,",
 		},
 		{
 			name:      "chat上游→responses客户端",
@@ -241,7 +240,7 @@ func TestTranslateStreamPairs(t *testing.T) {
 			clientEnc: openairesponses.NewStreamEncoder,
 			clientDec: openairesponses.NewStreamDecoder,
 			upstream:  chatSSE,
-			wantKinds: "block_start,text_delta,block_stop,stream_end,",
+			wantKinds: "stream_start,block_start,text_delta,block_stop,stream_end,",
 		},
 	}
 	for _, tc := range cases {
