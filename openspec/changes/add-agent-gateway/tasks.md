@@ -28,8 +28,8 @@
 
 ## 4. 供应商注册与熔断（internal/provider）
 
-- [ ] 4.1 先写失败测试：连续失败达阈值（默认 3）→ 打开并跳过；冷却（60s 起、指数×2、上限 15m，测试注入时钟）后半开放行单请求；探针成功关闭、失败重开；并发计数安全（`-race`）。
-- [ ] 4.2 实现 `breaker.go`（状态机+注入时钟）与 `registry.go`（快照供 status；请求/失败/在途计数）。验证：`go test -race ./internal/provider/`。
+- [x] 4.1 先写失败测试：连续失败达阈值（默认 3）→ 打开并跳过；冷却（60s 起、指数×2、上限 15m，测试注入时钟）后半开放行单请求；探针成功关闭、失败重开；并发计数安全（`-race`）。
+- [x] 4.2 实现 `breaker.go`（状态机+注入时钟）与 `registry.go`（快照供 status；请求/失败/在途计数）。验证：`go test -race ./internal/provider/`。
 
 ## 5. 网关 HTTP 核心（internal/gateway）
 
