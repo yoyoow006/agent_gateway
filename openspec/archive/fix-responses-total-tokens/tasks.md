@@ -26,5 +26,5 @@
 ## 4. 收尾
 
 - [x] 4.1 提交（测试+实现一个提交）；状态置待验证，报告用户。
-- [ ] 4.2 Verify 通过后 no-ff 合并 main、Archive（另按 verify/archive 技能执行）。
+- [x] 4.2 Verify 通过后 no-ff 合并 main、Archive（verify 综合审查通过，2026-09-03）。
 

@@ -1,7 +1,7 @@
 # fix-responses-total-tokens
 
 模式: 标准
-状态: 待归档
+状态: 已归档
 
 ## Why
 
