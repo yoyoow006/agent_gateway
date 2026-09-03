@@ -35,6 +35,22 @@
 - **WHEN** 全局池 A>B，项目 foo 配置只启用 B
 - **THEN** foo 档案请求只尝试 B
 
+#### Scenario: .env 提供密钥
+- **WHEN** `.env` 含 `RELAY_KEY=sk-xxx`，供应商配置 `api_key_env = "RELAY_KEY"`，且进程环境未设置该变量
+- **THEN** 网关启动后该供应商密钥解析成功，无需手动 export
+
+#### Scenario: 真实环境优先
+- **WHEN** `.env` 与进程环境中同名变量同时存在
+- **THEN** 使用进程环境的值，`.env` 不覆盖
+
+#### Scenario: 语法错误快速失败
+- **WHEN** `.env` 存在无法解析的行（如缺 `=`）
+- **THEN** 启动报错并指明行号，不静默跳过
+
+#### Scenario: 无 .env 行为不变
+- **WHEN** 根目录没有 `.env` 文件
+- **THEN** 启动照常，密钥仍走 local.toml 明文或真实环境变量
+
 #### Scenario: 密钥不落盘明文
 - **WHEN** 供应商以 `--api-key-env` 添加
 - **THEN** 配置文件只含 `env:` 引用，密钥值仅在进程内从环境解析
