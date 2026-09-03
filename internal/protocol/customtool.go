@@ -12,13 +12,18 @@ func CustomToolSchema() json.RawMessage {
 }
 
 // UnwrapCustomInput 从 tool_use 输出参数 JSON 中提取 code 原文；
-// 模型未按合成 schema 返回时宽容回退为整段参数文本（由客户端沙箱自行报错）。
+// code 键存在即返回其值（含空串），键缺失或非对象时宽容回退为整段参数文本
+// （由客户端沙箱自行报错）。
 func UnwrapCustomInput(inputJSON string) string {
-	var m struct {
-		Code string `json:"code"`
-	}
-	if err := json.Unmarshal([]byte(inputJSON), &m); err == nil && m.Code != "" {
-		return m.Code
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(inputJSON), &m); err == nil {
+		if raw, ok := m["code"]; ok {
+			var s string
+			if err := json.Unmarshal(raw, &s); err == nil {
+				return s
+			}
+			return inputJSON // code 非字符串：退回原文
+		}
 	}
 	return inputJSON
 }

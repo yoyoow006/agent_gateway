@@ -19,7 +19,28 @@
 - [x] 3.1 重建部署：`go build -o ./agw ./cmd/agw`，重启网关。
 - [x] 3.2 yxr 跨协议真实工具调用：preferred=yxr，demo 下 `codex -p agw exec "创建文件 hello.txt 内容为 hi"`（model 用已映射名），验证：请求不再出现 additional_tools 丢弃告警；模型发起工具调用并执行；文件真实创建；会话完整结束无 stream 断流。
 - [x] 3.3 回归：同协议（zhipu-responses）codex 干活不劣化；Claude Code 路径（/v1/messages→yxr）回归正常；透传链路字节级不变（既有测试）。
-- [x] 3.4 记录证据到本文件。
+- [x] 3.4 记录证据到本文件（修复审查 F4）。
+
+### 3.4 证据（2026-09-03，commit 9a90f38 之后）
+
+**E2E 真实工具调用（3.2）**
+
+- 网关重建：`go build -o ./agw ./cmd/agw`，新 pid 2755846，监听 127.0.0.1:8787（前实例运行 5196s 退出）。
+- 真实执行：`AGW_API_KEY=$TOKEN codex -p agw -c 'model="gpt-5.6-sol"' exec "创建文件 hello.txt，内容为 hi-agw"`，codex 报「已创建 hello.txt，内容为 hi-agw」并完整收尾，无 stream 断流。
+- 文件系统验证：`hello.txt` 存在，6 字节，内容 `hi-agw`（真实执行的工具调用落盘，已收尾清理）。
+- 会话开销：28,026 tokens，3 次请求 / 0 失败，会话完整结束。
+
+**回归矩阵（3.3）**
+
+- 跨协议自定义路径：网关日志扫描 0 条 `additional_tools` drop 告警；熔断器视角 yxr 完成 3 请求 / 0 失败。
+- 同协议（zhipu-responses）：codex 经 zhipu-responses 返回 `"OK"`（7,082 tokens），无劣化；之后 profile 已切回 yxr。
+- Claude Code 路径：`POST /v1/messages` 跨协议转 yxr，返回 MiniMax-M3 合法 message（带 thinking 块、text `"OK"`、end_turn）。
+- 字节级透传：既有测试覆盖同协议链路零字节变化。
+
+**测试套件（2.7 + 验证）**
+
+- `go vet ./...` 无告警；`go test -count=1 ./...` 全绿。
+- 7 个新增 custom/additional 测试：`TestParseAdditionalTools`（含 9 function + 1 custom、custom 标记、点连名、扁平）、`TestCustomToolHistory`、`TestUnwrapCustomInput`（含空 code 兜底，审查 F1 红→绿）、`TestChatCodecCustomToolBuild`、`TestAnthropicCodecCustomToolBuild`、`TestResponseCustomToolCall`（含 custom_tool_call 输出且非 function_call）、`TestTranslateCustomToolCallResponsesClientToChatUpstream`（审查 F5 网关接线，0.005s 首跑即绿）。
 
 ## 4. 收尾
 

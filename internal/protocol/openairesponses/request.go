@@ -2,6 +2,7 @@
 package openairesponses
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -524,9 +525,13 @@ func errorCode(status int) string {
 }
 
 // flattenAdditionalTools 把 additional_tools 的 namespace 树展开为点连名扁平 ToolDef。
-// 未知内嵌类型仅丢弃该工具并告警（不整体失败），与"未知事件忽略不失败"原则一致。
+// 未知内嵌类型与空名（畸形载荷）仅丢弃该工具并告警（不整体失败），与"未知事件忽略不失败"原则一致。
 func flattenAdditionalTools(prefix string, tools []wireAddTool, out *[]protocol.ToolDef) {
 	for _, t := range tools {
+		if t.Name == "" {
+			protocol.NotifyDrop("additional_tools 内工具缺少 name 已跳过（前缀 " + prefix + "）")
+			continue
+		}
 		name := t.Name
 		if prefix != "" {
 			name = prefix + "." + t.Name
@@ -555,10 +560,15 @@ func wrapCustomInput(input string) string {
 
 // ExtractCustomTools 从客户端原始请求体提取 custom 型工具名单（点连名）。
 // 网关在响应翻译路径用它把命中名单的 tool_use 标记为 custom 调用，随请求无状态。
+// 先做字节级快速探测：不含 additional_tools 的 body（绝大多数请求，含透传路径）
+// 直接返回，避免无谓的全量 JSON 扫描与重复解析告警。
 func ExtractCustomTools(body []byte) map[string]bool {
+	if !bytes.Contains(body, []byte("additional_tools")) {
+		return nil
+	}
 	var w struct {
 		Input []struct {
-			Type  string `json:"type"`
+			Type  string        `json:"type"`
 			Tools []wireAddTool `json:"tools"`
 		} `json:"input"`
 	}
