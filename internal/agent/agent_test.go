@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -40,127 +41,149 @@ func (r *okRunner) Run(name string, args ...string) error {
 	return nil
 }
 
-func TestInstallClaudeSettingsMerge(t *testing.T) {
-	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	os.MkdirAll(claudeDir, 0o755)
-	// 用户已有自定义配置
-	os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{
-		"theme": "dark",
-		"permissions": {"allow": ["Bash(ls)"]},
-		"env": {"OTHER": "keep"}
-	}`), 0o644)
+// snapshotFile 记录文件内容与修改时间（零接触断言用）；不存在返回标记。
+func snapshotFile(t *testing.T, path string) (string, time.Time, bool) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", time.Time{}, false
+	}
+	data, _ := os.ReadFile(path)
+	return string(data), fi.ModTime(), true
+}
 
-	runner := &okRunner{}
-	if err := InstallClaude(Options{Home: home, Listen: "127.0.0.1:8787", Token: "agw-tok", Runner: runner}); err != nil {
+// 任务1.2：GenerateClaudeSettings。
+func TestGenerateClaudeSettings(t *testing.T) {
+	root := t.TempDir()
+	path, err := GenerateClaudeSettings(root, "foo", "127.0.0.1:8787", "agw-foo-tok")
+	if err != nil {
 		t.Fatal(err)
 	}
-	// npm 被调用（探测 + 安装两条）
-	if len(runner.commands) != 2 || !strings.Contains(runner.commands[1], "@anthropic-ai/claude-code") {
-		t.Errorf("npm 命令 = %v", runner.commands)
-	}
-	// 备份存在
-	backups, _ := filepath.Glob(filepath.Join(claudeDir, "settings.json.agw-backup-*"))
-	if len(backups) != 1 {
-		t.Fatalf("应生成一个备份, got %v", backups)
+	if path != filepath.Join(root, ".agw", "claude-settings.foo.json") {
+		t.Fatalf("path = %s", path)
 	}
 	var settings map[string]any
-	data, _ := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
+	data, _ := os.ReadFile(path)
 	if err := json.Unmarshal(data, &settings); err != nil {
 		t.Fatal(err)
 	}
-	// 用户键保留
-	if settings["theme"] != "dark" {
-		t.Error("用户键 theme 被破坏")
-	}
 	env, _ := settings["env"].(map[string]any)
-	if env["OTHER"] != "keep" {
-		t.Error("用户 env 键被破坏")
+	if env["ANTHROPIC_BASE_URL"] != "http://127.0.0.1:8787" || env["ANTHROPIC_AUTH_TOKEN"] != "agw-foo-tok" {
+		t.Fatalf("env = %+v", env)
 	}
-	if env["ANTHROPIC_BASE_URL"] != "http://127.0.0.1:8787" {
-		t.Errorf("BASE_URL = %v", env["ANTHROPIC_BASE_URL"])
+	fi, _ := os.Stat(path)
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("权限 = %v", fi.Mode().Perm())
 	}
-	if env["ANTHROPIC_AUTH_TOKEN"] != "agw-tok" {
-		t.Errorf("AUTH_TOKEN = %v", env["ANTHROPIC_AUTH_TOKEN"])
+	// global 命名
+	p2, _ := GenerateClaudeSettings(root, "", "127.0.0.1:8787", "agw-g")
+	if !strings.HasSuffix(p2, "claude-settings.global.json") {
+		t.Errorf("global 命名 = %s", p2)
 	}
-}
-
-func TestInstallClaudeCorruptedJSONRefuses(t *testing.T) {
-	home := t.TempDir()
-	claudeDir := filepath.Join(home, ".claude")
-	os.MkdirAll(claudeDir, 0o755)
-	os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{broken`), 0o644)
-	err := InstallClaude(Options{Home: home, Listen: "127.0.0.1:8787", Token: "t", Runner: &okRunner{}})
-	if err == nil {
-		t.Fatal("损坏 JSON 应拒绝写入")
-	}
-	data, _ := os.ReadFile(filepath.Join(claudeDir, "settings.json"))
-	if string(data) != `{broken` {
-		t.Error("原文件被改动")
+	// 重写：换令牌后重跑同名文件更新
+	GenerateClaudeSettings(root, "foo", "127.0.0.1:8787", "agw-new-tok")
+	data, _ = os.ReadFile(path)
+	if !strings.Contains(string(data), "agw-new-tok") {
+		t.Error("重写未生效")
 	}
 }
 
-func TestInstallCodexConfigMerge(t *testing.T) {
+// 任务1.2：EnsureCodexProfile。
+func TestEnsureCodexProfile(t *testing.T) {
 	home := t.TempDir()
-	codexDir := filepath.Join(home, ".codex")
-	os.MkdirAll(codexDir, 0o755)
-	os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte(`
-model = "gpt-5.2"
-
-[model_providers.mine]
-name = "Mine"
-base_url = "https://mine.example/v1"
-env_key = "MINE_KEY"
-`), 0o644)
-
-	if err := InstallCodex(Options{Home: home, Listen: "127.0.0.1:8787", Token: "agw-tok", Runner: &okRunner{}}); err != nil {
+	codexHome := filepath.Join(home, ".codex")
+	if err := EnsureCodexProfile(codexHome, "127.0.0.1:8787"); err != nil {
 		t.Fatal(err)
 	}
-	backups, _ := filepath.Glob(filepath.Join(codexDir, "config.toml.agw-backup-*"))
-	if len(backups) != 1 {
-		t.Fatalf("应生成一个备份, got %v", backups)
-	}
+	path := filepath.Join(codexHome, "agw.config.toml")
 	var cfg map[string]any
-	if _, err := toml.DecodeFile(filepath.Join(codexDir, "config.toml"), &cfg); err != nil {
+	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		t.Fatal(err)
-	}
-	if cfg["model"] != "gpt-5.2" {
-		t.Error("用户 model 键被破坏")
 	}
 	if cfg["model_provider"] != "agw" {
 		t.Errorf("model_provider = %v", cfg["model_provider"])
 	}
 	if v, _ := cfg["disable_response_storage"].(bool); !v {
-		t.Error("应禁用响应存储（无状态可切换前提）")
+		t.Error("disable_response_storage 应为 true")
 	}
 	provs, _ := cfg["model_providers"].(map[string]any)
 	agw, _ := provs["agw"].(map[string]any)
-	if agw == nil {
-		t.Fatalf("model_providers.agw 缺失: %+v", provs)
+	if agw == nil || agw["base_url"] != "http://127.0.0.1:8787/v1" || agw["wire_api"] != "responses" || agw["env_key"] != "AGW_API_KEY" {
+		t.Fatalf("agw provider = %+v", agw)
 	}
-	if agw["base_url"] != "http://127.0.0.1:8787/v1" {
-		t.Errorf("base_url = %v", agw["base_url"])
+	fi, _ := os.Stat(path)
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("权限 = %v", fi.Mode().Perm())
 	}
-	if agw["wire_api"] != "responses" {
-		t.Errorf("wire_api = %v", agw["wire_api"])
+	// config.toml 未被创建（零接触）
+	if _, err := os.Stat(filepath.Join(codexHome, "config.toml")); err == nil {
+		t.Error("config.toml 不应被创建")
 	}
-	if agw["env_key"] != "AGW_API_KEY" {
-		t.Errorf("env_key = %v", agw["env_key"])
+	// 幂等重写：换网关地址后重跑更新
+	if err := EnsureCodexProfile(codexHome, "127.0.0.1:9999"); err != nil {
+		t.Fatal(err)
 	}
-	mine, _ := provs["mine"].(map[string]any)
-	if mine == nil || mine["base_url"] != "https://mine.example/v1" {
-		t.Error("用户 provider 被破坏")
+	var cfg2 map[string]any
+	toml.DecodeFile(path, &cfg2)
+	provs2, _ := cfg2["model_providers"].(map[string]any)
+	agw2, _ := provs2["agw"].(map[string]any)
+	if agw2["base_url"] != "http://127.0.0.1:9999/v1" {
+		t.Errorf("幂等重写失败: %+v", agw2)
+	}
+}
+
+// 任务1.2：install 全程零接触用户默认配置。
+func TestInstallZeroTouch(t *testing.T) {
+	home := t.TempDir()
+	root := t.TempDir()
+	// 预置用户既有配置（含自定义内容）
+	claudeDir := filepath.Join(home, ".claude")
+	os.MkdirAll(claudeDir, 0o755)
+	os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(`{"theme":"dark"}`), 0o644)
+	codexDir := filepath.Join(home, ".codex")
+	os.MkdirAll(codexDir, 0o755)
+	os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte("model = \"gpt-5.2\"\n"), 0o644)
+
+	cs, cm, _ := snapshotFile(t, filepath.Join(claudeDir, "settings.json"))
+	xs, xm, _ := snapshotFile(t, filepath.Join(codexDir, "config.toml"))
+
+	runner := &okRunner{}
+	if err := InstallClaude(Options{Home: home, Root: root, Listen: "127.0.0.1:8787", Runner: runner}); err != nil {
+		t.Fatal(err)
+	}
+	if err := InstallCodex(Options{Home: home, Root: root, Listen: "127.0.0.1:8787", Runner: runner}); err != nil {
+		t.Fatal(err)
+	}
+	// npm 各两条（探测+安装）
+	if len(runner.commands) != 4 {
+		t.Fatalf("npm 命令 = %v", runner.commands)
+	}
+	// 用户默认配置内容与 mtime 不变
+	cs2, cm2, _ := snapshotFile(t, filepath.Join(claudeDir, "settings.json"))
+	if cs2 != cs || !cm2.Equal(cm) {
+		t.Errorf("claude settings 被改动: %q→%q", cs, cs2)
+	}
+	xs2, xm2, _ := snapshotFile(t, filepath.Join(codexDir, "config.toml"))
+	if xs2 != xs || !xm2.Equal(xm) {
+		t.Errorf("codex config 被改动: %q→%q", xs, xs2)
+	}
+	// 独立产物就位
+	if fi, err := os.Stat(filepath.Join(root, ".agw")); err != nil || !fi.IsDir() {
+		t.Errorf(".agw 目录未创建: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(codexDir, "agw.config.toml")); err != nil {
+		t.Errorf("codex profile 未生成: %v", err)
 	}
 }
 
 func TestInstallNpmMissing(t *testing.T) {
-	err := InstallClaude(Options{Home: t.TempDir(), Listen: "127.0.0.1:8787", Token: "t", Runner: failRunner{}})
+	err := InstallClaude(Options{Home: t.TempDir(), Root: t.TempDir(), Listen: "127.0.0.1:8787", Runner: failRunner{}})
 	if err == nil || !strings.Contains(err.Error(), "npm") {
 		t.Fatalf("应给出 npm 指引: %v", err)
 	}
 }
 
-func TestPrepareExec(t *testing.T) {
+// 任务1.4：PrepareExec 注入独立配置参数。
+func TestPrepareExecIsolatedConfigs(t *testing.T) {
 	root := writeRepo(t, map[string]string{
 		"config/local.toml": `
 [gateway]
@@ -171,34 +194,54 @@ token = "agw-foo"
 `,
 		"projects/foo/.keep": "",
 	})
-	// claude 项目令牌
+	home := t.TempDir()
+	t.Setenv("HOME", home) // 隔离 ~/.codex
+
+	// claude：argv 含 --settings，文件含项目令牌，令牌不再直接注入进程 env
 	env, dir, argv, err := PrepareExec(root, "claude", "foo", []string{"--model", "x"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(argv) < 4 || argv[0] != "claude" || argv[1] != "--settings" {
+		t.Fatalf("argv = %v", argv)
+	}
+	settingsPath := argv[2]
+	if !strings.Contains(settingsPath, ".agw") {
+		t.Fatalf("settings 路径 = %s", settingsPath)
+	}
+	data, _ := os.ReadFile(settingsPath)
+	if !strings.Contains(string(data), "agw-foo") {
+		t.Fatalf("settings 未含项目令牌: %s", data)
+	}
+	if env["ANTHROPIC_AUTH_TOKEN"] != "" {
+		t.Errorf("claude 令牌应走 settings 文件而非进程 env: %v", env)
+	}
 	if dir != filepath.Join(root, "projects", "foo") {
 		t.Errorf("dir = %s", dir)
 	}
-	if env["ANTHROPIC_BASE_URL"] != "http://127.0.0.1:8787" || env["ANTHROPIC_AUTH_TOKEN"] != "agw-foo" {
-		t.Errorf("claude env = %v", env)
+	if argv[len(argv)-1] != "x" || argv[len(argv)-2] != "--model" {
+		t.Errorf("用户参数应在末尾: %v", argv)
 	}
-	if len(argv) != 3 || argv[0] != "claude" || argv[2] != "x" {
-		t.Errorf("argv = %v", argv)
-	}
-	// codex 全局令牌（无项目 → cwd 不在 projects 下）
-	env, _, argv, err = PrepareExec(root, "codex", "", nil)
+
+	// codex：argv 含 -p agw，env 含 AGW_API_KEY，profile 已确保
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+	env, _, argv, err = PrepareExec(root, "codex", "foo", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if env["AGW_API_KEY"] != "agw-global" {
-		t.Errorf("codex env = %v", env)
+	if len(argv) < 3 || argv[0] != "codex" || argv[1] != "-p" || argv[2] != "agw" {
+		t.Fatalf("argv = %v", argv)
 	}
-	if len(argv) != 1 || argv[0] != "codex" {
-		t.Errorf("argv = %v", argv)
+	if env["AGW_API_KEY"] != "agw-foo" {
+		t.Errorf("AGW_API_KEY = %v", env)
 	}
+	if _, err := os.Stat(filepath.Join(codexHome, "agw.config.toml")); err != nil {
+		t.Errorf("profile 未确保: %v", err)
+	}
+
 	// 项目不存在
-	_, _, _, err = PrepareExec(root, "claude", "nope", nil)
-	if err == nil || !strings.Contains(err.Error(), "foo") {
-		t.Fatalf("应列出可用项目: %v", err)
+	if _, _, _, err := PrepareExec(root, "claude", "nope", nil); err == nil {
+		t.Fatal("应报错")
 	}
 }

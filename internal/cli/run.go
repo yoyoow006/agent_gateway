@@ -43,7 +43,7 @@ func runInstall(cmd *cobra.Command, args []string) {
 	if err := config.EnsureSecrets(root, cfg); err != nil {
 		fatalf("%v", err)
 	}
-	opts := agent.Options{Listen: cfg.Gateway.Listen, Token: cfg.Gateway.DefaultToken}
+	opts := agent.Options{Listen: cfg.Gateway.Listen, Root: root}
 	var err error
 	if kind == agent.KindClaude {
 		err = agent.InstallClaude(opts)

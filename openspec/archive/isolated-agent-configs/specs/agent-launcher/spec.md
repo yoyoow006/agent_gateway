@@ -1,10 +1,6 @@
-# agent-launcher 规格
+# agent-launcher 规格（delta）
 
-## Purpose
-
-本能力定义 Claude Code 与 Codex 的一键安装（npm + 用户配置安全合并）与项目上下文启动（令牌注入、exec 替换进程）。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 一键安装 Claude Code
 `agw install claude` SHALL 检测 node/npm 前置（缺失时给出安装指引并中止），通过 `npm i -g @anthropic-ai/claude-code` 安装，并预生成网关侧独立配置 `<网关根>/.agw/claude-settings.<项目|global>.json` 所需目录；**不得读取或写入 `~/.claude/settings.json`** 等用户默认配置。
