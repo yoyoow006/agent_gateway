@@ -15,3 +15,7 @@
 ## 2026-09-03 · 来源变更 translate-additional-tools
 **坑**：Codex ≥0.149 的工具编排走 input 条目 `additional_tools`（namespace 树内嵌 function/custom），此前跨协议整体丢弃（NEW-01 边界）；custom 型 `functions.exec`（V8 JS 沙箱）无 JSON schema，且 codex 0.153 无开关可退回经典形态（`features.code_mode.enabled=false` 无效）。
 **解**：namespace 展平为点连名（调用名=定义名，免反查）；function 直取 schema；custom 合成 `{code:string}` schema、响应侧按请求提取的 custom 名单（`ExtractCustomTools`，无会话状态）打标 `Part.CustomTool` 还原 `custom_tool_call`（历史路径 `custom_tool_call/_output` 同步映射）。抓包利器：临时 CODEX_HOME + 本地捕获服务器伪造模型 SSE，可直接逼出 codex 的回传格式。
+
+## 2026-09-03 · 跨项目对比方法论纠偏
+**坑**：拿 cc-switch（Rust 重度优化、Codex 单客户端三向翻译）的实现模式直接对比 agent_gateway（Go 全互译 IR + codec 八方法），把"流截断必须发协议终止帧"列为 P0 缺陷——实际上 `forward.go:414-416` 注释与 `TestTranslatedStreamTruncationEmitsError`（断言不含 `message_stop`）显式锁定"截断 = 错误帧 + 不收尾"为有意设计（failover + agent 重试依赖流中断信号，STR-01 已 resolved）。
+**解**：跨项目对比时，报告"对方有我们没有"前必须查 `.ai-local/reviews/` 与 OpenSpec 历史决议——本仓可能有相反的显式回归测试；不要假设对方是默认基线。判别标准：① 检查 `.ai-local/reviews/*/findings-ledger.md` 与 `delta-review.md` 是否已 resolved；② 检查仓库显式回归测试断言（如 `if strings.Contains(out, "event: message_stop") { t.Fatalf(...) }` 反向断言）；③ 检查源文件顶部注释的设计意图。下次跨项目对比报告里若再出现"P0 缺陷"，必须先给出复现证据（手工或测试）而不是仅靠"主流 SDK 可能 X"的推断。
