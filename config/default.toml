@@ -1,0 +1,43 @@
+# agw 网关默认配置（本文件入库，禁止放任何密钥；个人覆盖与密钥放 config/local.toml）
+# 合并顺序：config/default.toml ← config/local.toml ← projects/<名>/agw.toml（后者覆盖前者）
+
+[gateway]
+# 监听地址：保持 127.0.0.1，仅本机访问；改为 0.0.0.0 会暴露到网络，谨慎
+listen = "127.0.0.1:8787"
+# 日志级别：debug | info（默认 info）
+log_level = "info"
+# default_token / admin_token 首次 `agw serve/start` 时自动生成到 config/local.toml（0600）
+
+# 供应商池：同名条目在 local.toml 中按字段覆盖；priority 数字越小越优先；
+# protocol 取值：anthropic | openai-chat | openai-responses
+# 密钥推荐用环境变量间接：api_key_env = "RELAY1_KEY"（明文 api_key 只应出现在 local.toml）
+# model_map：请求模型名 → 该供应商实际模型名（缺省透传）
+# headers：附加到上游请求的自定义头（部分中转站需要）
+# connect_timeout_sec / first_byte_timeout_sec：连接 / 首字节超时（默认 5 / 60 秒）
+
+# [[providers]]
+# name = "official-anthropic"
+# protocol = "anthropic"
+# base_url = "https://api.anthropic.com"
+# api_key_env = "ANTHROPIC_API_KEY"
+# priority = 10
+# enabled = true
+
+# [[providers]]
+# name = "relay-chat"
+# protocol = "openai-chat"
+# base_url = "https://relay.example.com/v1"
+# api_key_env = "RELAY_CHAT_KEY"
+# priority = 20
+# enabled = true
+#
+# [providers.model_map]
+# "claude-sonnet-5" = "claude-sonnet-5-relay"
+
+# [[providers]]
+# name = "openai-responses"
+# protocol = "openai-responses"
+# base_url = "https://api.openai.com/v1"
+# api_key_env = "OPENAI_API_KEY"
+# priority = 30
+# enabled = false
