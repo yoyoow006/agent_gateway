@@ -20,3 +20,6 @@ __pycache__/
 
 # .env 密钥文件（dotenv）
 /.env
+
+# agw 生成的 agent 独立配置（含令牌）
+/.agw/
