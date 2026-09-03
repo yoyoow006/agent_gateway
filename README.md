@@ -32,7 +32,7 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 ./agw start
 ./agw status
 
-# 4. 一键安装并指向网关（npm 安装 + 备份后安全合并 agent 配置）
+# 4. 一键安装 agent（npm 安装 + 生成独立配置；不碰你的 ~/.claude 与 ~/.codex 默认文件）
 ./agw install claude
 ./agw install codex
 
@@ -121,8 +121,8 @@ preferred = "relay"
 | `agw status [--json]` / `logs [-f]` | 供应商熔断状态与计数 / 日志 |
 | `agw provider list/add/remove/enable/disable/test` | 供应商池管理；`test` 探测 `/v1/models` 延迟 |
 | `agw switch <名>` | 粘性首选 |
-| `agw install claude\|codex` | npm 安装 + agent 配置安全合并（自动备份） |
-| `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent |
+| `agw install claude\|codex` | npm 安装 + 生成独立配置（零接触用户默认文件） |
+| `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile |
 | `agw project new/list` | 业务项目工作区（独立 git 仓库） |
 
 热重载：配置变更后 `agw provider add/switch` 自动通知网关；也可 `kill -HUP <pid>`。坏配置保留旧配置继续服务。
@@ -136,9 +136,14 @@ preferred = "relay"
 
 ## 回滚
 
-- agent 配置：`~/.claude/settings.json` / `~/.codex/config.toml` 旁的 `.agw-backup-<时间戳>` 恢复（TOML 重写可能丢注释，以备份为准）。
+- agent 侧零接触设计：`~/.claude/settings.json` 与 `~/.codex/config.toml` 从未被 agw 修改，无需恢复。删除 agw 生成的独立文件即完全卸载配置：`<网关根>/.agw/`（claude settings，含令牌）与 `$CODEX_HOME/agw.config.toml`（codex profile）。
 - 网关自身：本仓库 feature 分支按任务提交，可逐提交回退。
-- 临时绕过网关：删除 settings.json env 两个键 / 把 `model_provider` 改回原供应商即可。
+- 临时绕过网关：直接裸跑 `claude` / `codex`（不带 agw 的 `--settings`/`-p` 参数）即用你自己的默认配置。
+
+### 独立配置注入方式（实测 claude `--settings` 为叠加层、codex 0.149.1 `-p` 为独立 profile 文件叠加）
+
+- `agw run claude` → `claude --settings <根>/.agw/claude-settings.<项目|global>.json`（0600，每次启动按当前项目令牌重写；你自己的 settings 继续生效，仅同名 env 键被覆盖）。
+- `agw run codex` → `codex -p agw`（`$CODEX_HOME/agw.config.toml`，尊重 `CODEX_HOME` 环境变量；密钥经 `AGW_API_KEY` 注入，profile 文件不含密钥）。
 
 ## 开发
 
