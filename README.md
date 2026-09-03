@@ -21,8 +21,8 @@ Codex ──config.toml base_url──────►┤  ├─ 令牌→项目
 # 1. 构建
 go build -o agw ./cmd/agw
 
-# 2. 添加供应商（密钥建议走环境变量；明文只写入 0600 的 config/local.toml）
-export OFFICIAL_KEY=sk-xxx
+# 2. 密钥写进 .env（已被 git 忽略；建议 chmod 600），供应商用环境变量名引用
+cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / RELAY_KEY
 ./agw provider add official --protocol anthropic --base-url https://api.anthropic.com \
     --api-key-env OFFICIAL_KEY --priority 10
 ./agw provider add relay --protocol openai-chat --base-url https://relay.example/v1 \
@@ -130,7 +130,7 @@ preferred = "relay"
 ## 安全
 
 - 默认仅绑定 `127.0.0.1`；管理端点 `/__agw/metrics|reload` 需 admin 令牌（`healthz` 除外）。
-- 密钥只存 0600 的 `config/local.toml` 或环境变量（`api_key_env`）；提交版 `config/default.toml` 不含密钥。
+- 密钥三选一（优先级从高到低）：`config/local.toml` 明文 `api_key`（0600）> 真实环境变量 > 根目录 `.env`（自动加载、已被 git 忽略、建议 0600；语法错误启动即报错，权限过宽有警告；见 `.env.example`）；提交版 `config/default.toml` 不含密钥。
 - 日志与错误输出全部脱敏（令牌前 6 位 + `***`）；无遥测。
 - 请求体 failover 重放缓冲上限 64MiB（超限 413，不触上游）。
 

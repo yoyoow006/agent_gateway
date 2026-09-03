@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -30,8 +31,14 @@ func init() {
 	rootCommands = append(rootCommands, serveCmd)
 }
 
-// buildServer 组装网关实例（含密钥补齐、降级告警钩子、热重载函数）。
+// buildServer 组装网关实例（含 .env 加载、密钥补齐、降级告警钩子、热重载函数）。
 func buildServer(root string) (*gateway.Server, *config.Config, error) {
+	// .env 密钥环境文件：真实环境变量优先，语法错误快速失败
+	if warn, err := config.LoadEnvFile(filepath.Join(root, ".env")); err != nil {
+		return nil, nil, fmt.Errorf("加载 .env 失败: %w", err)
+	} else if warn != "" {
+		fmt.Fprintln(os.Stderr, "⚠️  "+warn)
+	}
 	cfg, err := config.Load(root)
 	if err != nil {
 		return nil, nil, err

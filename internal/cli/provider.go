@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -194,6 +195,11 @@ func ProbeProvider(p *config.Provider) (time.Duration, error) {
 
 func runProviderTest(cmd *cobra.Command, args []string) {
 	root := resolveRoot()
+	if warn, err := config.LoadEnvFile(filepath.Join(root, ".env")); err != nil {
+		fatalf("加载 .env 失败: %v", err)
+	} else if warn != "" {
+		fmt.Fprintln(os.Stderr, "⚠️  "+warn)
+	}
 	cfg := loadConfig(root)
 	p := cfg.Provider(args[0])
 	if p == nil {

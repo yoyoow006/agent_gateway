@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -332,5 +333,90 @@ func TestProbeAnthropicVersionHeader(t *testing.T) {
 	p := &config.Provider{Name: "a", Protocol: config.ProtocolAnthropic, BaseURL: up.URL, APIKey: "sk-a"}
 	if _, err := ProbeProvider(p); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// 任务1.4：.env 自动加载端到端（经 buildServer 注入，api_key_env 解析生效）。
+func TestBuildServerLoadsEnvFile(t *testing.T) {
+	var gotAuth atomic.Value
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth.Store(r.Header.Get("Authorization"))
+		w.WriteHeader(200)
+		io.WriteString(w, `{"ok":1}`)
+	}))
+	defer up.Close()
+	root := writeRepo(t, map[string]string{
+		"config/local.toml": `
+[[providers]]
+name = "relay"
+protocol = "openai-chat"
+base_url = "` + up.URL + `"
+api_key_env = "AGW_DOTENV_E2E"
+priority = 1
+enabled = true
+
+[gateway]
+default_token = "agw-t"
+`,
+		".env": "AGW_DOTENV_E2E=sk-from-env-file\n",
+	})
+	s, cfg, err := buildServer(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw := httptest.NewServer(s.Handler())
+	t.Cleanup(gw.Close)
+	req, _ := http.NewRequest("POST", gw.URL+"/v1/messages", strings.NewReader(`{"model":"m","max_tokens":1}`))
+	req.Header.Set("Authorization", "Bearer "+cfg.Gateway.DefaultToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if gotAuth.Load() != "Bearer sk-from-env-file" {
+		t.Fatalf("上游认证 = %v，.env 未生效", gotAuth.Load())
+	}
+}
+
+// 任务1.4：真实环境变量优先于 .env。
+func TestBuildServerRealEnvWins(t *testing.T) {
+	var gotAuth atomic.Value
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth.Store(r.Header.Get("Authorization"))
+		w.WriteHeader(200)
+		io.WriteString(w, `{"ok":1}`)
+	}))
+	defer up.Close()
+	root := writeRepo(t, map[string]string{
+		"config/local.toml": `
+[[providers]]
+name = "relay"
+protocol = "openai-chat"
+base_url = "` + up.URL + `"
+api_key_env = "AGW_DOTENV_E2E2"
+priority = 1
+enabled = true
+
+[gateway]
+default_token = "agw-t"
+`,
+		".env": "AGW_DOTENV_E2E2=sk-from-env-file\n",
+	})
+	t.Setenv("AGW_DOTENV_E2E2", "sk-from-real-env")
+	s, cfg, err := buildServer(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw := httptest.NewServer(s.Handler())
+	t.Cleanup(gw.Close)
+	req, _ := http.NewRequest("POST", gw.URL+"/v1/messages", strings.NewReader(`{"model":"m","max_tokens":1}`))
+	req.Header.Set("Authorization", "Bearer "+cfg.Gateway.DefaultToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if gotAuth.Load() != "Bearer sk-from-real-env" {
+		t.Fatalf("上游认证 = %v，真实环境变量应优先", gotAuth.Load())
 	}
 }

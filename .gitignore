@@ -17,3 +17,6 @@ __pycache__/
 /agw.bin
 /dist/
 .claude/settings.local.json.tmp.*
+
+# .env 密钥文件（dotenv）
+/.env
