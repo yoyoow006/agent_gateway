@@ -7,6 +7,7 @@
 | 助手阶段技能 | 所选助手的 `skills/` | Open、Design、Build、Verify、Archive |
 | 项目事实 | `.ai/kb/projects/registry.json` 和项目卡 | 有界只读查询范围 |
 | 变更状态 | `openspec/changes/<变更名>/` | proposal 状态、tasks 进度与 delta |
+| agw 网关实现 | `internal/`、`cmd/agw/`、`README.md` | Go 网关源码与命令参考；坑与决策见 `.ai/memory/agent-gateway.md`、架构事实见 `.ai/kb/projects/agent-gateway.md`（未入 registry 查询白名单，整仓形态与子目录 schema 不符） |
 | 工作流校验 | `scripts/validate-workflow.sh` | 结构、mutation、工具测试与门禁 |
 
 新增模块后从权威来源核对并更新本表、registry 与项目卡；不要记录临时检出状态。
