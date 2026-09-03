@@ -15,7 +15,7 @@ Codex ──config.toml base_url──────►┤  ├─ 令牌→项目
 
 ## 快速开始
 
-前置：Go ≥1.22（构建）、Node.js ≥18 + npm（安装 agent）、git。
+前置：Go ≥1.24（构建）、Node.js ≥18 + npm（安装 agent）、git。完整的编译安装与使用说明见 [docs/usage-guide.md](docs/usage-guide.md)。
 
 ```bash
 # 1. 构建

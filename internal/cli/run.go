@@ -13,7 +13,7 @@ import (
 var (
 	installCmd = &cobra.Command{
 		Use:   "install <claude|codex>",
-		Short: "一键安装 agent 并指向网关（npm + 配置安全合并）",
+		Short: "一键安装 agent 并生成独立配置（npm + 零接触用户默认文件）",
 		Args:  cobra.ExactArgs(1),
 		Run:   runInstall,
 	}
