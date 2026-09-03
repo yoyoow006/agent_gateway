@@ -146,6 +146,10 @@ func ParseRequest(body []byte) (protocol.Request, error) {
 					protocol.Thinking(sb.String()),
 				}})
 			}
+		case "additional_tools":
+			// Codex ≥0.149 以 additional_tools/namespace/custom 携带内置与 MCP 工具编排，
+			// 超出 v1 function 型 IR；跨协议场景 Codex 请配 openai-responses 供应商（透传不受影响）。
+			protocol.NotifyDrop("additional_tools（Codex 工具编排）跨协议翻译不支持已丢弃；Codex 请使用 openai-responses 协议供应商（v1 已接受边界）")
 		default:
 			protocol.NotifyDrop("responses input 未知条目类型 " + it.Type + " 被跳过")
 		}

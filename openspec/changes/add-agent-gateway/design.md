@@ -65,6 +65,7 @@
 | `top_k`、`metadata.user_id` 等 | 无对应字段的协议丢弃 + 调试日志 |
 | 响应中的 `model` 字段 | 保留上游原值（仅展示用途） |
 | 音视频等块 | 400 明确错误（v1 非目标） |
+| Codex `additional_tools`（namespace/custom 工具编排） | 跨协议翻译丢弃 + 显式告警；Codex 请配 openai-responses 供应商（v1 已接受边界，用户 2026-09-03 决策） |
 
 ## 失败路径
 

@@ -60,6 +60,10 @@ anthropic、openai-chat、openai-responses 三协议 SHALL 各提供请求解析
 ### Requirement: 无状态可切换
 翻译路径 SHALL 不依赖跨请求会话状态（每个请求自包含完整上下文），使任意一次请求都可 failover 到任意协议的供应商；Codex 配置由 `agw install codex` 写入禁用响应存储，避免 `previous_response_id` 依赖。
 
+#### Scenario: Codex 工具编排形态（已接受边界）
+- **WHEN** Codex 以 `additional_tools`（namespace/custom 工具编排）携带工具且上游协议非 openai-responses
+- **THEN** 这些工具无法映射为 function 型定义而被丢弃并记录显式告警；Codex 应配置 openai-responses 协议供应商走透传（v1 已接受边界，用户 2026-09-03 决策）
+
 #### Scenario: 会话中途换协议
 - **WHEN** 同一会话第 N 个请求因故障从 chat 供应商切到 anthropic 供应商
 - **THEN** 请求携带完整历史上下文，上游正常处理，客户端无感知

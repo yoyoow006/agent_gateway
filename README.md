@@ -152,6 +152,7 @@ bash scripts/validate-workflow.sh --fast                 # 工作流校验
 
 ## 已知边界
 
+- **Codex 跨协议场景的工具编排不可用（已接受边界）**：新版 Codex（实测 0.149.1）以 `additional_tools`/`namespace`/`custom` 形态在 input 中携带内置工具（exec 等）与 MCP 工具，超出 v1 的 function 型翻译面——跨协议（Codex→仅 chat/anthropic 供应商）时这些工具会被丢弃并记日志告警。**Codex 请配置 openai-responses 协议供应商**（同协议字节透传，不受影响）；Claude Code 全场景不受影响。
 - Codex 的 `GET /v1/responses/{id}` 单响应拉取**未路由**（返回 404）；禁用响应存储后 Codex 不使用该路径，每请求自包含全量上下文。
 - `count_tokens` 优先转发 anthropic 上游；不可用时返回本地粗估（字节/4），误差只影响上下文预算判断。
 - v1 非目标：TUI/Web 控制台、主动拨测、负载均衡、Windows、计费统计、音视频多模态。
