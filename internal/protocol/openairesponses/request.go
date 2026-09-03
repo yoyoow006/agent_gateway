@@ -22,20 +22,33 @@ type inputPart struct {
 }
 
 type inputItem struct {
-	Type    string          `json:"type"` // message | function_call | function_call_output | reasoning
+	Type    string          `json:"type"` // message | function_call | function_call_output | reasoning | additional_tools | custom_tool_call | custom_tool_call_output
 	Role    string          `json:"role,omitempty"`
 	Content json.RawMessage `json:"content,omitempty"` // string 或 parts
-	// function_call
+	// function_call / custom_tool_call
 	CallID    string `json:"call_id,omitempty"`
 	Name      string `json:"name,omitempty"`
 	Arguments string `json:"arguments,omitempty"`
-	// function_call_output
+	// custom_tool_call：调用输入为原始文本（非 JSON）
+	Input string `json:"input,omitempty"`
+	// function_call_output / custom_tool_call_output
 	Output json.RawMessage `json:"output,omitempty"` // string 或 parts
 	// reasoning
 	Summary []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	} `json:"summary,omitempty"`
+	// additional_tools：Codex ≥0.149 工具编排（namespace 树内嵌 function/custom）
+	Tools []wireAddTool `json:"tools,omitempty"`
+}
+
+// wireAddTool 是 additional_tools 的内嵌工具定义。
+type wireAddTool struct {
+	Type        string          `json:"type"` // namespace | function | custom
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"` // function
+	Tools       []wireAddTool   `json:"tools,omitempty"`      // namespace 内嵌
 }
 
 type wireTool struct {
@@ -147,9 +160,17 @@ func ParseRequest(body []byte) (protocol.Request, error) {
 				}})
 			}
 		case "additional_tools":
-			// Codex ≥0.149 以 additional_tools/namespace/custom 携带内置与 MCP 工具编排，
-			// 超出 v1 function 型 IR；跨协议场景 Codex 请配 openai-responses 供应商（透传不受影响）。
-			protocol.NotifyDrop("additional_tools（Codex 工具编排）跨协议翻译不支持已丢弃；Codex 请使用 openai-responses 协议供应商（v1 已接受边界）")
+			// Codex ≥0.149 工具编排：namespace 树展开为 <ns>.<name> 点连名；
+			// function 直取 schema，custom 标记后由目标协议合成 code 参数。
+			flattenAdditionalTools("", it.Tools, &req.Tools)
+		case "custom_tool_call":
+			req.Turns = append(req.Turns, protocol.Turn{Role: "assistant", Parts: []protocol.Part{
+				protocol.ToolUse(it.CallID, it.Name, wrapCustomInput(it.Input)),
+			}})
+		case "custom_tool_call_output":
+			req.Turns = append(req.Turns, protocol.Turn{Role: "user", Parts: []protocol.Part{
+				protocol.ToolResult(it.CallID, parseOutput(it.Output), false),
+			}})
 		default:
 			protocol.NotifyDrop("responses input 未知条目类型 " + it.Type + " 被跳过")
 		}
@@ -442,6 +463,10 @@ func BuildResponse(resp protocol.Response) (int, []byte) {
 		case protocol.KindText:
 			w.Output = append(w.Output, inputItem{Type: "message", Role: "assistant", Content: mustJSON([]inputPart{{Type: "output_text", Text: p.Text}})})
 		case protocol.KindToolUse:
+			if p.CustomTool {
+				w.Output = append(w.Output, inputItem{Type: "custom_tool_call", CallID: p.ToolCallID, Name: p.ToolName, Input: protocol.UnwrapCustomInput(p.ToolInputJSON)})
+				continue
+			}
 			args := p.ToolInputJSON
 			if args == "" {
 				args = "{}"
@@ -496,4 +521,65 @@ func errorCode(status int) string {
 	default:
 		return "server_error"
 	}
+}
+
+// flattenAdditionalTools 把 additional_tools 的 namespace 树展开为点连名扁平 ToolDef。
+// 未知内嵌类型仅丢弃该工具并告警（不整体失败），与"未知事件忽略不失败"原则一致。
+func flattenAdditionalTools(prefix string, tools []wireAddTool, out *[]protocol.ToolDef) {
+	for _, t := range tools {
+		name := t.Name
+		if prefix != "" {
+			name = prefix + "." + t.Name
+		}
+		switch t.Type {
+		case "namespace":
+			flattenAdditionalTools(name, t.Tools, out)
+		case "function":
+			*out = append(*out, protocol.ToolDef{Name: name, Description: t.Description, Schema: t.Parameters})
+		case "custom":
+			*out = append(*out, protocol.ToolDef{Name: name, Description: t.Description, Custom: true})
+		default:
+			protocol.NotifyDrop("additional_tools 内未知工具类型 " + t.Type + " 已跳过: " + name)
+		}
+	}
+}
+
+// wrapCustomInput 把 custom 调用的原始文本输入包装为 {"code": ...} JSON。
+func wrapCustomInput(input string) string {
+	b, err := json.Marshal(map[string]string{"code": input})
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+// ExtractCustomTools 从客户端原始请求体提取 custom 型工具名单（点连名）。
+// 网关在响应翻译路径用它把命中名单的 tool_use 标记为 custom 调用，随请求无状态。
+func ExtractCustomTools(body []byte) map[string]bool {
+	var w struct {
+		Input []struct {
+			Type  string `json:"type"`
+			Tools []wireAddTool `json:"tools"`
+		} `json:"input"`
+	}
+	if err := json.Unmarshal(body, &w); err != nil {
+		return nil
+	}
+	var set map[string]bool
+	for _, it := range w.Input {
+		if it.Type != "additional_tools" {
+			continue
+		}
+		var defs []protocol.ToolDef
+		flattenAdditionalTools("", it.Tools, &defs)
+		for _, d := range defs {
+			if d.Custom {
+				if set == nil {
+					set = map[string]bool{}
+				}
+				set[d.Name] = true
+			}
+		}
+	}
+	return set
 }

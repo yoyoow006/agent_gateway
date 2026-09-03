@@ -163,6 +163,7 @@ type encBlockState struct {
 	itemID     string
 	toolCallID string
 	toolName   string
+	custom     bool // Responses custom 型工具：输出 custom_tool_call，input 为解包文本
 	text       strings.Builder
 	args       strings.Builder
 	partAdded  bool
@@ -195,12 +196,16 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			},
 		})
 	case protocol.EvBlockStart:
-		b := &encBlockState{kind: ev.Block.Kind}
+		b := &encBlockState{kind: ev.Block.Kind, custom: ev.Block.CustomTool}
 		switch ev.Block.Kind {
 		case protocol.KindText:
 			b.itemID = protocol.NewID("msg")
 		case protocol.KindToolUse:
-			b.itemID = protocol.NewID("fc")
+			if b.custom {
+				b.itemID = protocol.NewID("ct")
+			} else {
+				b.itemID = protocol.NewID("fc")
+			}
 			b.toolCallID = ev.Block.ToolCallID
 			b.toolName = ev.Block.ToolName
 		case protocol.KindThinking:
@@ -217,10 +222,17 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			item["role"] = "assistant"
 			item["content"] = []any{}
 		case protocol.KindToolUse:
-			item["type"] = "function_call"
-			item["call_id"] = b.toolCallID
-			item["name"] = b.toolName
-			item["arguments"] = ""
+			if b.custom {
+				item["type"] = "custom_tool_call"
+				item["call_id"] = b.toolCallID
+				item["name"] = b.toolName
+				item["input"] = ""
+			} else {
+				item["type"] = "function_call"
+				item["call_id"] = b.toolCallID
+				item["name"] = b.toolName
+				item["arguments"] = ""
+			}
 		case protocol.KindThinking:
 			item["type"] = "reasoning"
 			item["summary"] = []any{}
@@ -263,6 +275,10 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			return nil
 		}
 		b.args.WriteString(ev.ToolDelta)
+		if b.custom {
+			// custom 工具无 JSON 参数增量事件形态：仅缓冲，完整 input 在 done/completed 携带
+			return nil
+		}
 		return e.send("response.function_call_arguments.delta", map[string]any{
 			"type": "response.function_call_arguments.delta", "item_id": b.itemID,
 			"output_index": ev.Index, "delta": ev.ToolDelta,
@@ -288,6 +304,16 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 				},
 			})
 		case protocol.KindToolUse:
+			if b.custom {
+				return e.send("response.output_item.done", map[string]any{
+					"type": "response.output_item.done", "output_index": ev.Index,
+					"item": map[string]any{
+						"id": b.itemID, "type": "custom_tool_call", "status": "completed",
+						"call_id": b.toolCallID, "name": b.toolName,
+						"input": protocol.UnwrapCustomInput(b.args.String()),
+					},
+				})
+			}
 			if err := e.send("response.function_call_arguments.done", map[string]any{
 				"type": "response.function_call_arguments.done", "item_id": b.itemID,
 				"output_index": ev.Index, "arguments": orDefault(b.args.String(), "{}"),
@@ -322,6 +348,14 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 					"content": []any{map[string]any{"type": "output_text", "text": b.text.String(), "annotations": []any{}}},
 				})
 			case protocol.KindToolUse:
+				if b.custom {
+					output = append(output, map[string]any{
+						"id": b.itemID, "type": "custom_tool_call", "status": "completed",
+						"call_id": b.toolCallID, "name": b.toolName,
+						"input": protocol.UnwrapCustomInput(b.args.String()),
+					})
+					continue
+				}
 				output = append(output, map[string]any{
 					"id": b.itemID, "type": "function_call", "status": "completed",
 					"call_id": b.toolCallID, "name": b.toolName,

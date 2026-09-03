@@ -300,3 +300,142 @@ func TestErrorMapping(t *testing.T) {
 		t.Errorf("BuildError = %s err=%v", body, err)
 	}
 }
+
+// TestParseAdditionalTools 锁定 Codex additional_tools（namespace/custom/function）展开契约。
+// 载荷形态取自 codex-cli 0.153.0 真实抓包（2026-09-03）。
+func TestParseAdditionalTools(t *testing.T) {
+	body := `{"model":"gpt-5.6-sol","stream":true,"input":[
+  {"type":"additional_tools","id":"at_1","role":"developer","tools":[
+    {"type":"namespace","name":"functions","description":"","tools":[
+      {"type":"custom","name":"exec","description":"Run JavaScript code to orchestrate tool calls"},
+      {"type":"function","name":"wait","description":"Wait for seconds","parameters":{"type":"object","properties":{"seconds":{"type":"number"}}},"strict":true}
+    ]},
+    {"type":"namespace","name":"collaboration","tools":[
+      {"type":"function","name":"spawn_agent","description":"Spawn","parameters":{"type":"object","properties":{"prompt":{"type":"string"}}}}
+    ]}
+  ]},
+  {"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}
+]}`
+	req, err := ParseRequest([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(req.Tools) != 3 {
+		t.Fatalf("tools = %d（want 3）: %+v", len(req.Tools), req.Tools)
+	}
+	byName := map[string]protocol.ToolDef{}
+	for _, td := range req.Tools {
+		byName[td.Name] = td
+	}
+	exec, ok := byName["functions.exec"]
+	if !ok || !exec.Custom {
+		t.Errorf("functions.exec 应存在且 Custom=true: %+v", byName["functions.exec"])
+	}
+	if !strings.Contains(exec.Description, "Run JavaScript") {
+		t.Errorf("exec description 应原样保留: %q", exec.Description)
+	}
+	wait, ok := byName["functions.wait"]
+	if !ok || wait.Custom || string(wait.Schema) == "" || !strings.Contains(string(wait.Schema), "seconds") {
+		t.Errorf("functions.wait 应为 function 型且 schema 透传: %+v", byName["functions.wait"])
+	}
+	spawn, ok := byName["collaboration.spawn_agent"]
+	if !ok || spawn.Custom || !strings.Contains(string(spawn.Schema), "prompt") {
+		t.Errorf("collaboration.spawn_agent 应存在且 schema 透传: %+v", byName["collaboration.spawn_agent"])
+	}
+	// additional_tools 条目被消费：turns 只剩用户消息
+	if len(req.Turns) != 1 || len(req.Turns[0].Parts) != 1 || req.Turns[0].Parts[0].Text != "hi" {
+		t.Errorf("turns 应只剩用户消息: %+v", req.Turns)
+	}
+}
+
+// TestCustomCallHistory 锁定 custom_tool_call / custom_tool_call_output 历史映射。
+func TestCustomCallHistory(t *testing.T) {
+	body := `{"model":"gpt-5.6-sol","input":[
+  {"type":"message","role":"user","content":[{"type":"input_text","text":"建文件"}]},
+  {"type":"custom_tool_call","id":"ct_1","call_id":"call_1","name":"functions.exec","input":"return \"capture-ok\";","status":"completed"},
+  {"type":"custom_tool_call_output","id":"ctco_1","call_id":"call_1","output":"done"}
+]}`
+	req, err := ParseRequest([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 第二轮：assistant 工具调用（code 包装）
+	if len(req.Turns) < 2 {
+		t.Fatalf("turns = %d（want >=2）: %+v", len(req.Turns), req.Turns)
+	}
+	use := req.Turns[1].Parts[0]
+	if use.Kind != protocol.KindToolUse || use.ToolCallID != "call_1" || use.ToolName != "functions.exec" {
+		t.Errorf("custom_tool_call → tool_use 失败: %+v", use)
+	}
+	var in map[string]any
+	if err := json.Unmarshal([]byte(use.ToolInputJSON), &in); err != nil || in["code"] != `return "capture-ok";` {
+		t.Errorf("ToolInputJSON 应为 {code: 原文}: %q err=%v", use.ToolInputJSON, err)
+	}
+	// 第三轮：user 工具结果
+	res := req.Turns[2].Parts[0]
+	if res.Kind != protocol.KindToolResult || res.ToolCallID != "call_1" || res.ToolResult != "done" {
+		t.Errorf("custom_tool_call_output → tool result 失败: %+v", res)
+	}
+}
+
+// TestEncodeCustomToolCall 锁定 custom 工具调用的流式与非流式输出形态。
+func TestEncodeCustomToolCall(t *testing.T) {
+	// 流式
+	var sb strings.Builder
+	enc := NewStreamEncoder(&sb)
+	events := []protocol.Event{
+		{Kind: protocol.EvStreamStart, Model: "m"},
+		{Kind: protocol.EvBlockStart, Index: 0, Block: protocol.Part{
+			Kind: protocol.KindToolUse, ToolCallID: "call_1", ToolName: "functions.exec", CustomTool: true,
+		}},
+		{Kind: protocol.EvToolCallDelta, Index: 0, ToolDelta: `{"code":"return 1;"}`},
+		{Kind: protocol.EvBlockStop, Index: 0},
+		{Kind: protocol.EvStreamEnd, StopReason: protocol.StopToolUse, Usage: protocol.Usage{Input: 1, Output: 1}},
+	}
+	for _, ev := range events {
+		if err := enc.Encode(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := sb.String()
+	if !strings.Contains(out, `"type":"custom_tool_call"`) {
+		t.Errorf("流式应输出 custom_tool_call:\n%s", out)
+	}
+	if strings.Contains(out, `"type":"function_call"`) {
+		t.Errorf("custom 工具不应输出 function_call:\n%s", out)
+	}
+	if !strings.Contains(out, `"input":"return 1;"`) {
+		t.Errorf("input 应为解包后的 code 原文:\n%s", out)
+	}
+
+	// 非流式
+	_, body := BuildResponse(protocol.Response{
+		Model: "m",
+		Parts: []protocol.Part{{
+			Kind: protocol.KindToolUse, ToolCallID: "call_1", ToolName: "functions.exec",
+			ToolInputJSON: `{"code":"return 2;"}`, CustomTool: true,
+		}},
+	})
+	if !strings.Contains(string(body), `"type":"custom_tool_call"`) || !strings.Contains(string(body), `"input":"return 2;"`) {
+		t.Errorf("非流式 custom_tool_call 形态错误: %s", body)
+	}
+}
+
+// TestExtractCustomTools 锁定从客户端原始 body 提取 custom 名单（网关无状态标记用）。
+func TestExtractCustomTools(t *testing.T) {
+	body := []byte(`{"model":"m","input":[
+  {"type":"additional_tools","tools":[
+    {"type":"namespace","name":"functions","tools":[
+      {"type":"custom","name":"exec","description":"d"},
+      {"type":"function","name":"wait","parameters":{"type":"object"}}
+    ]}
+  ]},
+  {"type":"message","role":"user","content":"hi"}]}`)
+	set := ExtractCustomTools(body)
+	if len(set) != 1 || !set["functions.exec"] {
+		t.Errorf("set = %+v（want 仅 functions.exec）", set)
+	}
+	if ExtractCustomTools([]byte(`{"input":"plain"}`)) != nil {
+		t.Errorf("无 additional_tools 应返回 nil")
+	}
+}
