@@ -1,7 +1,7 @@
 # add-agent-gateway
 
 模式: 标准
-状态: 待验证
+状态: 待归档
 
 ## Why
 
