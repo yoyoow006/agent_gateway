@@ -122,6 +122,15 @@ func TestParseResponseAndBuild(t *testing.T) {
 		t.Errorf("parts = %+v", resp.Parts)
 	}
 	status, out := BuildResponse(resp)
+	var raw map[string]any
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	usage, _ := raw["usage"].(map[string]any)
+	// Codex 0.149+ 将 total_tokens 视为必填字段，缺失即断流
+	if usage["total_tokens"] != float64(18) || usage["input_tokens"] != float64(11) || usage["output_tokens"] != float64(7) {
+		t.Errorf("非流式 usage = %v，缺 total_tokens 或值错误（应 11+7=18）", usage)
+	}
 	resp2, err := ParseResponse(status, out)
 	if err != nil {
 		t.Fatal(err)
@@ -202,6 +211,36 @@ func TestStreamDecoder(t *testing.T) {
 	}
 }
 
+func TestStreamDecoderPrefixedNames(t *testing.T) {
+	// 原生上游（OpenAI/智谱）事件 type 带 response. 前缀，解码器须同样识别
+	sse := `event: response.output_item.added
+data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","content":[]}}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":""}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_1","output_index":0,"content_index":0,"delta":"好"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_1","status":"completed","content":[{"type":"output_text","text":"好"}]}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`
+	evs := collect(t, NewStreamDecoder(strings.NewReader(sse)))
+	kinds := ""
+	for _, e := range evs {
+		kinds += string(e.Kind) + ","
+	}
+	if kinds != "block_start,text_delta,block_stop,stream_end," {
+		t.Fatalf("prefixed kinds = %s", kinds)
+	}
+	end := evs[len(evs)-1]
+	if end.Usage.Input != 1 || end.Usage.Output != 1 {
+		t.Errorf("prefixed end = %+v", end)
+	}
+}
+
 func TestStreamEncoderRoundTrip(t *testing.T) {
 	irEvents := []protocol.Event{
 		{Kind: protocol.EvStreamStart, Model: "gpt-5.2-codex"},
@@ -222,10 +261,12 @@ func TestStreamEncoderRoundTrip(t *testing.T) {
 	}
 	out := sb.String()
 	for _, want := range []string{
-		"event: response.created", "event: output_item.added",
+		"event: response.created", "event: response.output_item.added",
+		`"type":"response.output_item.added"`,
 		"event: response.output_text.delta", `"delta":"你好"`,
-		"event: output_item.done", "event: response.completed",
-		`"input_tokens":12`, `"status":"completed"`,
+		"event: response.output_item.done", `"type":"response.output_item.done"`,
+		"event: response.completed",
+		`"input_tokens":12`, `"total_tokens":20`, `"status":"completed"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("输出缺少 %q\n%s", want, out)

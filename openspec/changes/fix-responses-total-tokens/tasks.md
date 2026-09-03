@@ -2,22 +2,29 @@
 
 ## 1. 准备
 
-- [ ] 1.1 建分支：`git checkout -b feature/fix-responses-total-tokens`（基于 main f86af3d，工作区须干净）
+- [x] 1.1 建分支：`git checkout -b feature/fix-responses-total-tokens`（基于 main 3ddca85；default.toml 注释修正已先行独立提交）
 
 ## 2. TDD 实现
 
-- [ ] 2.1 红：改 `internal/protocol/openairesponses/openairesponses_test.go`——流式黄金样例 `response.completed` 期望 usage 含 `"total_tokens":<input+output>`；`BuildResponse` 用例断言 JSON 含 `"total_tokens"` 且值正确。运行 `go test ./internal/protocol/openairesponses/` 确认失败（缺字段）。
-- [ ] 2.2 绿：`request.go` `wireUsage` 增加 `TotalTokens int \`json:"total_tokens"\``，`BuildResponse`（:433）填充 `resp.Usage.Input + resp.Usage.Output`；`stream.go` `response.completed`（:342）usage map 增加 `"total_tokens": ev.Usage.Input + ev.Usage.Output`。重跑 2.1 命令全绿。
-- [ ] 2.3 全量回归：`go test ./...` 与 `go vet ./...` 全部通过。
+- [x] 2.1 红：`openairesponses_test.go` 非流式断言 usage 含 `total_tokens=18`、流式 wants 含 `"total_tokens":20`；实测两处 FAIL。
+- [x] 2.2 绿：`wireUsage` 增加 `TotalTokens`；`BuildResponse` 与流式 `response.completed` 填充 `Input+Output`；包测试通过。
+- [x] 2.3 全量回归：`go test ./...` 与 `go vet ./...` 全部通过。
+
+## 2b. 第二根因（验收 3.2 暴露，同族最小修复，已按 D6 纳入）
+
+- [x] 2b.1 现象：total_tokens 修复后 codex 回合完成但**回答文本为空**，`OutputTextDelta without active item` 噪音丢弃增量。对照智谱原生流定位：编码器事件 `type` 缺 `response.` 前缀（`output_item.added`/`output_item.done`/`content_part.added`/`content_part.done`），codex 按官方枚举反序列化失败静默丢弃 → item 永不激活。
+- [x] 2b.2 红：`TestStreamEncoderRoundTrip` wants 改为带前缀事件名 + `TestStreamDecoderPrefixedNames`（解码侧双名兼容，原生上游带前缀）双 FAIL。
+- [x] 2b.3 绿：编码器 4 组事件名补前缀；解码器 `output_item.added/done` 双名兼容；全量测试 + vet 通过。
 
 ## 3. 端到端验收（D5）
 
-- [ ] 3.1 重建并部署：`go build -o /usr/local/bin/agw ./cmd/agw`；`agw stop && agw start`（或等价重启）。
-- [ ] 3.2 跨协议真实复现：确保粘性首选为 yxr（`agw switch yxr`），在 `projects/demo` 以 `AGW_API_KEY=<default_token> codex -p agw exec "一句话回答：1+1等于几？"` 运行——原故障场景（model=glm-5.3 透传落 yxr 403→zhipu-anthropic 跨协议）或已映射模型（gpt-5.6-sol→MiniMax-M3 走 yxr 跨协议）均可，要求：正常出答案、无 `stream disconnected` 报错。
-- [ ] 3.3 同协议回归：`agw switch zhipu-responses` 后重复 3.2，行为不劣化；切回 `agw switch yxr`。
-- [ ] 3.4 记录验证证据（命令与输出摘要）到本文件或 verify 记录。
+- [x] 3.1 重建部署：`go build -o ./agw ./cmd/agw`（/usr/local/bin 无写权限，`agw start` 以自身二进制拉起 serve，等价生效）；重启网关 pid=2240484。
+- [x] 3.2 跨协议真实复现：preferred=yxr，codex profile model=glm-5.3（原故障场景：yxr 403→zhipu-anthropic 跨协议），`codex -p agw exec` 输出完整答案"1+1 等于 2，而我是由 Z.ai 训练的 GLM 大语言模型。"，无 `stream disconnected`，`without active item` 噪音 0 条。
+- [x] 3.3 同协议回归：preferred=zhipu-responses 下 codex 正常（"OK"，tokens 5890）；claude 路径回归（/v1/messages→yxr 跨协议）正常返回 MiniMax-M3 "OK"；已切回 yxr。
+- [x] 3.4 验证证据：本节命令与输出摘要 + 主会话调试记录（2026-09-03）。
 
 ## 4. 收尾
 
-- [ ] 4.1 提交（职责单元：测试+实现一个提交）；报告用户，进入待验证。
+- [x] 4.1 提交（测试+实现一个提交）；状态置待验证，报告用户。
 - [ ] 4.2 Verify 通过后 no-ff 合并 main、Archive（另按 verify/archive 技能执行）。
+

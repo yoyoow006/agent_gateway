@@ -20,9 +20,14 @@
 - **决策**：两处一起修，同一缺陷类、同一规格 Scenario。
 - **理由**：Codex 始终走流式，但非流式是同一 contract 的另一出口；只修一半会留下下次踩坑点，且测试成本几乎相同。
 
-### D4: `ReasoningSummaryDelta without active item` 噪音不纳入
-- **决策**：本变更不补 `response.reasoning_summary_part.added/done` 事件。
-- **理由**：实测该噪音为 Codex 日志级错误、不致命（流内容照常送达，最终死于 total_tokens 解析）；修复后以真实 Codex 复测确认。若复测仍阻塞则另立变更，避免本次范围膨胀。
+### D4: `ReasoningSummaryDelta without active item` 噪音不纳入（结论已更新）
+- **决策**：不补 `response.reasoning_summary_part.added/done` 事件。
+- **复测结论**：该噪音的真正根因是 D6 的事件名前缀缺失（item 事件被 codex 丢弃导致 delta 无处挂载）；D6 修复后实测噪音 0 条，无需补 part 事件。原"非致命"判断有误——噪音实际伴随回答文本丢失。
+
+### D6: 编码器事件名补 `response.` 前缀；解码器双名兼容
+- **决策**：编码器 `output_item.added`/`output_item.done`/`content_part.added`/`content_part.done` 四组事件的 SSE event 名与 data.type 统一改为 `response.` 前缀形态；解码器对 `output_item.added/done` 做带前缀/无前缀双名兼容。
+- **理由**：OpenAI/智谱原生事件 type 均带 `response.` 前缀，codex 按官方枚举严格反序列化，无名形态被静默丢弃 → item 不激活 → 文本增量全部丢失（验收 3.2 实测空回答）。解码侧历史黄金样例锁定的是无前缀名，双名兼容既认原生流也不破坏既有样例（加法容错，符合"解码器对未知事件忽略不失败"原则）。
+- **纳入依据**：与 total_tokens 同族（跨协议 responses 输出不合规致 codex 不可用），同文件同规格场景，属已确认范围的最小修复。
 
 ### D5: 验收以真实客户端为主证据
 - **决策**：单测（黄金样例红→绿）之外，必须以 codex 0.149.1 经跨协议链路（yxr / zhipu-anthropic）真实完成一次对话作为验收证据。

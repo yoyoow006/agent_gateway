@@ -370,6 +370,8 @@ func boolPtr(b bool) *bool { return &b }
 type wireUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
+	// TotalTokens 必填：严格客户端（Codex 0.149+）缺失该字段即解析断流。
+	TotalTokens int `json:"total_tokens"`
 }
 
 type wireResponse struct {
@@ -430,7 +432,7 @@ func BuildResponse(resp protocol.Response) (int, []byte) {
 	w := wireResponse{
 		ID: protocol.NewID("resp"), Object: "response", Status: "completed",
 		Model: resp.Model,
-		Usage: &wireUsage{InputTokens: resp.Usage.Input, OutputTokens: resp.Usage.Output},
+		Usage: &wireUsage{InputTokens: resp.Usage.Input, OutputTokens: resp.Usage.Output, TotalTokens: resp.Usage.Input + resp.Usage.Output},
 	}
 	if w.Model == "" {
 		w.Model = "agw"
