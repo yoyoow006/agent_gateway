@@ -257,17 +257,18 @@ func TestRunDashDashPassthrough(t *testing.T) {
 	if !captured.called {
 		t.Fatal("execAgent 未被调用（参数校验拦截或提前失败）")
 	}
-	want := []string{"claude", "--model", "x"}
-	if len(captured.argv) != len(want) {
-		t.Fatalf("argv = %v want %v", captured.argv, want)
+	// 独立配置模式：argv = claude --settings <path> --model x；令牌在 settings 文件里
+	argv := captured.argv
+	if len(argv) != 5 || argv[0] != "claude" || argv[1] != "--settings" ||
+		argv[3] != "--model" || argv[4] != "x" || !strings.Contains(argv[2], ".agw") {
+		t.Fatalf("argv = %v", argv)
 	}
-	for i := range want {
-		if captured.argv[i] != want[i] {
-			t.Fatalf("argv = %v want %v", captured.argv, want)
-		}
+	settingsData, err := os.ReadFile(argv[2])
+	if err != nil || !strings.Contains(string(settingsData), "agw-g") {
+		t.Errorf("settings 文件应含项目令牌: %v %s", err, settingsData)
 	}
-	if captured.env["ANTHROPIC_AUTH_TOKEN"] != "agw-g" {
-		t.Errorf("env 令牌 = %v", captured.env)
+	if captured.env["ANTHROPIC_AUTH_TOKEN"] != "" {
+		t.Errorf("令牌不应进进程 env: %v", captured.env)
 	}
 }
 

@@ -48,12 +48,19 @@ func PrepareExec(root, kind, project string, extraArgs []string) (map[string]str
 	var argv []string
 	switch kind {
 	case KindClaude:
-		env["ANTHROPIC_BASE_URL"] = "http://" + listen
-		env["ANTHROPIC_AUTH_TOKEN"] = token
-		argv = append([]string{"claude"}, extraArgs...)
+		// 独立 settings 文件承载网关地址与项目令牌（叠加层，用户 settings 继续生效）
+		settingsPath, err := GenerateClaudeSettings(root, project, listen, token)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("生成 claude 独立配置失败: %w", err)
+		}
+		argv = append([]string{"claude", "--settings", settingsPath}, extraArgs...)
 	case KindCodex:
+		home, _ := os.UserHomeDir()
+		if err := EnsureCodexProfile(CodexHome(home), listen); err != nil {
+			return nil, "", nil, fmt.Errorf("生成 codex profile 失败: %w", err)
+		}
 		env["AGW_API_KEY"] = token
-		argv = append([]string{"codex"}, extraArgs...)
+		argv = append([]string{"codex", "-p", "agw"}, extraArgs...)
 	default:
 		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex）", kind)
 	}
