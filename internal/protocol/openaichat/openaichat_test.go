@@ -268,3 +268,47 @@ func TestErrorMapping(t *testing.T) {
 		t.Errorf("BuildError = %s err=%v", body, err)
 	}
 }
+
+// TestCustomToolDefBuild 锁定 custom 型 ToolDef 合成 {code} schema 的构建契约。
+func TestCustomToolDefBuild(t *testing.T) {
+	req := protocol.Request{
+		Model: "m",
+		Turns: []protocol.Turn{{Role: "user", Parts: []protocol.Part{protocol.Text("hi")}}},
+		Tools: []protocol.ToolDef{
+			{Name: "functions.exec", Description: "Run JavaScript code", Custom: true},
+			{Name: "functions.wait", Description: "Wait", Schema: []byte(`{"type":"object","properties":{"seconds":{"type":"number"}}}`)},
+		},
+	}
+	_, _, body, err := BuildRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var w struct {
+		Tools []struct {
+			Function struct {
+				Name        string          `json:"name"`
+				Description string          `json:"description"`
+				Parameters  json.RawMessage `json:"parameters"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(body, &w); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Tools) != 2 {
+		t.Fatalf("tools = %d", len(w.Tools))
+	}
+	for _, tt := range w.Tools {
+		if tt.Function.Name == "functions.exec" {
+			if !strings.Contains(string(tt.Function.Parameters), `"code"`) || !strings.Contains(string(tt.Function.Parameters), "required") {
+				t.Errorf("exec 应合成 code schema: %s", tt.Function.Parameters)
+			}
+			if tt.Function.Description != "Run JavaScript code" {
+				t.Errorf("exec description 应透传: %q", tt.Function.Description)
+			}
+		}
+		if tt.Function.Name == "functions.wait" && !strings.Contains(string(tt.Function.Parameters), "seconds") {
+			t.Errorf("wait schema 应透传: %s", tt.Function.Parameters)
+		}
+	}
+}

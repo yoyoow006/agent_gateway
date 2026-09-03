@@ -255,7 +255,10 @@ func BuildRequest(req protocol.Request) (string, http.Header, []byte, error) {
 	}
 	for _, t := range req.Tools {
 		schema := t.Schema
-		if len(schema) == 0 {
+		if t.Custom {
+			// Responses custom 型工具：合成 {code} 单参数 schema，响应侧解包还原
+			schema = protocol.CustomToolSchema()
+		} else if len(schema) == 0 {
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
 		w.Tools = append(w.Tools, wireTool{Name: t.Name, Description: t.Description, InputSchema: schema})

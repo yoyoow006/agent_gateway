@@ -33,7 +33,7 @@ anthropic、openai-chat、openai-responses 三协议 SHALL 各提供请求解析
 - **THEN** 语义字段（消息、工具、参数）与样例一致，未知字段不导致解析失败
 
 ### Requirement: 请求语义映射
-翻译 SHALL 覆盖：system/instructions、多轮消息、文本与 base64 图片、工具定义、tool_choice、max_tokens、temperature、top_p、stop；`cache_control` 等仅 Anthropic 有的字段在非 Anthropic 上游被丢弃并记录警告日志；无法映射的块（音视频等 v1 非目标）返回 400 明确错误。
+翻译 SHALL 覆盖：system/instructions、多轮消息、文本与 base64 图片、工具定义、tool_choice、max_tokens、temperature、top_p、stop；Responses 输入条目 `additional_tools`（Codex ≥0.149 工具编排：namespace 分组、function 与 custom 内嵌形态）SHALL 展开为扁平工具定义参与翻译——namespace 展开为 `<namespace>.<name>` 调用名，function 型直取 JSON schema，custom 型合成单参数 `code` 文本 schema 并在响应与历史路径还原 custom 调用形态；`cache_control` 等仅 Anthropic 有的字段在非 Anthropic 上游被丢弃并记录警告日志；无法映射的块（音视频等 v1 非目标、未来新增未知工具类型）返回 400 明确错误或 NotifyDrop 显式告警。
 
 #### Scenario: 工具往返
 - **WHEN** Anthropic 请求含 tool_use 与 tool_result
@@ -42,6 +42,14 @@ anthropic、openai-chat、openai-responses 三协议 SHALL 各提供请求解析
 #### Scenario: 缓存控制降级
 - **WHEN** 请求携带 `cache_control` 且上游协议非 anthropic
 - **THEN** 该字段被移除，日志输出一条警告，请求继续
+
+#### Scenario: additional_tools 展开翻译
+- **WHEN** Codex 请求 input 含 `additional_tools`（namespace `functions` 内嵌 custom `exec` 与 function `wait`、namespace `collaboration` 内嵌 function 群），上游协议为 openai-chat 或 anthropic
+- **THEN** 上游收到扁平工具定义：`functions.wait`、`collaboration.*` 为原始 schema 的 function，`functions.exec` 为合成 `{code: string}` schema 的 function（description 原样）；请求历史中不再出现 additional_tools 条目；无整体丢弃告警
+
+#### Scenario: custom 调用往返保真
+- **WHEN** 上游返回名为 `functions.exec` 的工具调用（chat `tool_calls` / anthropic `tool_use`，参数为 `{"code":"<JS 源码>"}`），客户端协议为 openai-responses
+- **THEN** Codex 收到 `custom_tool_call` 条目（`name="functions.exec"`，`input` 为原始 JS 文本）；Codex 回传的 `custom_tool_call_output` 在后续请求翻译中映射为上游 tool 结果消息
 
 ### Requirement: 响应与流式事件映射
 非流式与流式响应 SHALL 映射内容块、结束原因（`end_turn/turn_stop/stop/completed`、`tool_use/tool_calls/function_call`、`max_tokens/length`）与 usage（输入/输出/缓存读写 token 对应字段）；输出为 Responses 格式时（跨协议重编码路径），usage SHALL 同时包含 `total_tokens` 且恒等于 `input_tokens + output_tokens`（流式 `response.completed` 事件与非流式响应体一致），满足将该字段视为必填的严格客户端（如 Codex 0.149+）完整解析；流式转换按目标协议合成合法事件序列（Anthropic：`message_start`、`content_block_*`、`message_delta`、`message_stop`、心跳；Responses：`response.created`、`response.output_item.added`、`response.output_text.delta`、`response.output_item.done`、`response.completed` 等，事件 SSE 名与 data.type 一致采用官方 `response.*` 前缀形态），并保持工具调用参数增量正确拼接；Responses 流式解码 SHALL 同时接受带与不带 `response.` 前缀的 item 事件（原生上游与历史样例兼容）。
@@ -74,11 +82,11 @@ anthropic、openai-chat、openai-responses 三协议 SHALL 各提供请求解析
 - **THEN** 该供应商计入失败参与切换；全链失败时客户端收到自身协议格式的 401 错误体
 
 ### Requirement: 无状态可切换
-翻译路径 SHALL 不依赖跨请求会话状态（每个请求自包含完整上下文），使任意一次请求都可 failover 到任意协议的供应商；Codex 配置由 `agw install codex` 写入禁用响应存储，避免 `previous_response_id` 依赖。
+翻译路径 SHALL 不依赖跨请求会话状态（每个请求自包含完整上下文，custom 工具名单随请求 IR 携带），使任意一次请求都可 failover 到任意协议的供应商；Codex 配置由 `agw install codex` 写入禁用响应存储，避免 `previous_response_id` 依赖。
 
-#### Scenario: Codex 工具编排形态（已接受边界）
+#### Scenario: Codex 工具编排跨协议可用（边界已解除）
 - **WHEN** Codex 以 `additional_tools`（namespace/custom 工具编排）携带工具且上游协议非 openai-responses
-- **THEN** 这些工具无法映射为 function 型定义而被丢弃并记录显式告警；Codex 应配置 openai-responses 协议供应商走透传（v1 已接受边界，用户 2026-09-03 决策）
+- **THEN** 工具定义经展开翻译送达上游，模型可发起 `functions.*` 调用并经翻译回传执行，Codex 跨协议链路工具可用；未来新增的无法映射工具类型仍显式告警丢弃（模型侧行为能力为披露的残余风险，非翻译缺陷）
 
 #### Scenario: 会话中途换协议
 - **WHEN** 同一会话第 N 个请求因故障从 chat 供应商切到 anthropic 供应商

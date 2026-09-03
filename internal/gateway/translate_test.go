@@ -204,3 +204,39 @@ func TestTranslateUpstream401ToClientProtocol(t *testing.T) {
 		t.Fatalf("错误体应翻译为 anthropic 格式: %s", rec.Body.String())
 	}
 }
+
+// responses 客户端请求（含 Codex additional_tools 工具编排）
+const responsesAdditionalToolsReq = `{"model":"gpt-5.6-sol","stream":true,"input":[{"type":"additional_tools","role":"developer","tools":[{"type":"namespace","name":"functions","tools":[{"type":"custom","name":"exec","description":"Run JavaScript code"}]}]},{"type":"message","role":"user","content":"干活"}]}`
+
+// chat 上游流式脚本：模型调用 custom 工具 functions.exec
+const chatCustomToolSSE = `data: {"choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_c1","type":"function","function":{"name":"functions.exec","arguments":""}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"code\":\"return 1;\"}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":null}],"usage":{"prompt_tokens":9,"completion_tokens":4}}
+
+data: [DONE]
+`
+
+// TestTranslateCustomToolCallResponsesClientToChatUpstream 锁定网关 custom 名单
+// 打标接线：additional_tools 里的 custom 工具经 chat 上游回叫后还原为 custom_tool_call。
+func TestTranslateCustomToolCallResponsesClientToChatUpstream(t *testing.T) {
+	up := chatUpstream(t, chatCustomToolSSE)
+	prov := config.Provider{Name: "c", Protocol: config.ProtocolOpenAIChat, BaseURL: up.server.URL, APIKey: "sk-upstream", Priority: 1, Enabled: true}
+	out := streamViaGateway(t, prov, "/v1/responses", responsesAdditionalToolsReq)
+	for _, want := range []string{
+		`"type":"custom_tool_call"`, `"name":"functions.exec"`, `"call_id":"call_c1"`,
+		`"input":"return 1;"`, "event: response.completed",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("客户端 SSE 缺少 %q\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, `"type":"function_call"`) {
+		t.Errorf("custom 工具不应编码为 function_call:\n%s", out)
+	}
+}

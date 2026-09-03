@@ -265,7 +265,10 @@ func BuildRequest(req protocol.Request) (string, http.Header, []byte, error) {
 		wt.Function.Name = t.Name
 		wt.Function.Description = t.Description
 		wt.Function.Parameters = t.Schema
-		if len(wt.Function.Parameters) == 0 {
+		if t.Custom {
+			// Responses custom 型工具：合成 {code} 单参数 schema，响应侧解包还原
+			wt.Function.Parameters = protocol.CustomToolSchema()
+		} else if len(wt.Function.Parameters) == 0 {
 			wt.Function.Parameters = json.RawMessage(`{"type":"object"}`)
 		}
 		w.Tools = append(w.Tools, wt)

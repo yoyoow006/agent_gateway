@@ -13,6 +13,7 @@ import (
 
 	"agent_gateway/internal/config"
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/openairesponses"
 )
 
 // maxBody 是 failover 重放缓冲上限。
@@ -55,6 +56,12 @@ func (s *Server) handleForward(clientProto config.Protocol) func(http.ResponseWr
 // forward 按候选链逐家尝试；首字节前失败换下一家，全败返回最后一次错误。
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto config.Protocol, profile *config.Profile, body []byte) {
 	clientCodec := codecFor(clientProto)
+	// Responses 客户端（Codex）的 custom 型工具名单：响应翻译时据此把命中名字的
+	// tool_use 还原为 custom_tool_call。随请求提取，无会话状态。
+	var customTools map[string]bool
+	if clientProto == config.ProtocolOpenAIResponses {
+		customTools = openairesponses.ExtractCustomTools(body)
+	}
 	chain := profile.Chain
 	if len(chain) == 0 {
 		writeError(w, clientCodec, 503, "档案内没有启用的供应商")
@@ -104,7 +111,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto con
 		}
 		// 成功
 		s.registry.RecordSuccess(p.Name)
-		s.relaySuccess(w, r, clientProto, p, resp)
+		s.relaySuccess(w, r, clientProto, p, resp, customTools)
 		return
 	}
 	if lastTried {
@@ -204,7 +211,7 @@ func classifyTransportError(err error) error {
 }
 
 // relaySuccess 把 2xx 响应回传客户端：同协议透传，跨协议按需翻译。
-func (s *Server) relaySuccess(w http.ResponseWriter, r *http.Request, clientProto config.Protocol, p *config.Provider, resp *http.Response) {
+func (s *Server) relaySuccess(w http.ResponseWriter, r *http.Request, clientProto config.Protocol, p *config.Provider, resp *http.Response, customTools map[string]bool) {
 	defer resp.Body.Close()
 	outHeader := w.Header()
 	for k, vs := range resp.Header {
@@ -224,7 +231,7 @@ func (s *Server) relaySuccess(w http.ResponseWriter, r *http.Request, clientProt
 	}
 	clientCodec, provCodec := codecFor(clientProto), codecFor(p.Protocol)
 	if isSSE(resp) || r.URL.Query().Get("stream") != "" {
-		translateStream(w, provCodec, clientCodec, resp.Body, p.Name, s.logger)
+		translateStream(w, provCodec, clientCodec, resp.Body, p.Name, s.logger, customTools)
 		return
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxBody))
@@ -234,6 +241,7 @@ func (s *Server) relaySuccess(w http.ResponseWriter, r *http.Request, clientProt
 		w.Write(body)
 		return
 	}
+	markCustomTools(ir.Parts, customTools)
 	_, out := clientCodec.BuildResponse(ir)
 	w.Write(out)
 }
@@ -406,7 +414,7 @@ func copyStream(dst io.Writer, src io.Reader) error {
 // translateStream 上游 SSE → IR → 客户端 SSE。
 // 截断（解码错误或 EOF 无结束事件）输出客户端协议的错误帧并终止，
 // 不合成正常收尾——agent 依赖错误信号触发自带重试落到健康供应商。
-func translateStream(w io.Writer, provCodec, clientCodec protocol.Codec, body io.Reader, provName string, logger interface{ Printf(string, ...any) }) {
+func translateStream(w io.Writer, provCodec, clientCodec protocol.Codec, body io.Reader, provName string, logger interface{ Printf(string, ...any) }, customTools map[string]bool) {
 	dec := provCodec.NewStreamDecoder(body)
 	enc := clientCodec.NewStreamEncoder(newFlushWriter(w))
 	sawEnd := false
@@ -425,6 +433,11 @@ func translateStream(w io.Writer, provCodec, clientCodec protocol.Codec, body io
 		}
 		if ev.Kind == protocol.EvStreamEnd {
 			sawEnd = true
+		}
+		if ev.Kind == protocol.EvBlockStart && ev.Block.Kind == protocol.KindToolUse && customTools[ev.Block.ToolName] {
+			cp := ev.Block
+			cp.CustomTool = true
+			ev.Block = cp
 		}
 		if encErr := enc.Encode(ev); encErr != nil {
 			return
@@ -531,4 +544,16 @@ func (s *Server) clientFor(p *config.Provider) *http.Client {
 	s.clients[p.Name] = client
 	s.mu.Unlock()
 	return client
+}
+
+// markCustomTools 给命中 custom 名单的 tool_use 部件打标（非流式响应路径）。
+func markCustomTools(parts []protocol.Part, customTools map[string]bool) {
+	if len(customTools) == 0 {
+		return
+	}
+	for i := range parts {
+		if parts[i].Kind == protocol.KindToolUse && customTools[parts[i].ToolName] {
+			parts[i].CustomTool = true
+		}
+	}
 }

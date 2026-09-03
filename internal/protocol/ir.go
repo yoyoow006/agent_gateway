@@ -25,6 +25,9 @@ type Part struct {
 	ToolInputJSON   string // tool_use 输入参数（JSON 字符串，空视为 "{}"）
 	ToolResult      string // tool_result 文本内容
 	ToolResultIsErr bool   // tool_result 标记错误
+	// CustomTool 标记该 tool_use 源自 Responses custom 型工具（输入为原始文本）；
+	// 网关响应翻译按请求携带的 custom 名单打标，responses 编码器据此还原 custom_tool_call。
+	CustomTool bool
 }
 
 // 构造器。
@@ -51,6 +54,9 @@ type ToolDef struct {
 	Name        string
 	Description string
 	Schema      []byte
+	// Custom 标记 Responses 的 custom 型工具（无 JSON schema，调用输入为原始文本）；
+	// 目标协议构建时合成 {code: string} 单参数 schema，响应侧据此还原 custom 调用形态。
+	Custom bool
 }
 
 // ToolChoiceMode 是工具选择模式。

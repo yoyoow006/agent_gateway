@@ -286,3 +286,33 @@ func TestErrorMapping(t *testing.T) {
 		t.Errorf("BuildError = %s", body)
 	}
 }
+
+// TestCustomToolDefBuildAnthropic 锁定 custom 型 ToolDef 在 anthropic 构建侧的合成契约。
+func TestCustomToolDefBuildAnthropic(t *testing.T) {
+	req := protocol.Request{
+		Model: "m",
+		Turns: []protocol.Turn{{Role: "user", Parts: []protocol.Part{protocol.Text("hi")}}},
+		Tools: []protocol.ToolDef{
+			{Name: "functions.exec", Description: "Run JavaScript code", Custom: true},
+		},
+	}
+	_, _, body, err := BuildRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var w struct {
+		Tools []struct {
+			Name        string          `json:"name"`
+			InputSchema json.RawMessage `json:"input_schema"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(body, &w); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Tools) != 1 || w.Tools[0].Name != "functions.exec" {
+		t.Fatalf("tools = %+v", w.Tools)
+	}
+	if !strings.Contains(string(w.Tools[0].InputSchema), `"code"`) {
+		t.Errorf("exec 应合成 code schema: %s", w.Tools[0].InputSchema)
+	}
+}
