@@ -52,7 +52,8 @@ func (d *streamDecoder) Next() (protocol.Event, error) {
 			if json.Unmarshal([]byte(frame.Data), &e) == nil && head.Type == "response.created" {
 				return protocol.Event{Kind: protocol.EvStreamStart, Model: e.Response.Model}, nil
 			}
-		case "output_item.added":
+		// 原生上游 type 带 response. 前缀（OpenAI/智谱），历史样例无前缀，双名兼容
+		case "output_item.added", "response.output_item.added":
 			var e struct {
 				OutputIndex int       `json:"output_index"`
 				Item        inputItem `json:"item"`
@@ -104,7 +105,7 @@ func (d *streamDecoder) Next() (protocol.Event, error) {
 				continue
 			}
 			d.pending = append(d.pending, protocol.Event{Kind: protocol.EvToolCallDelta, Index: e.OutputIndex, ToolDelta: e.Delta})
-		case "output_item.done":
+		case "output_item.done", "response.output_item.done":
 			var e struct {
 				OutputIndex int `json:"output_index"`
 			}
@@ -224,14 +225,14 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			item["type"] = "reasoning"
 			item["summary"] = []any{}
 		}
-		if err := e.send("output_item.added", map[string]any{
-			"type": "output_item.added", "output_index": ev.Index, "item": item,
+		if err := e.send("response.output_item.added", map[string]any{
+			"type": "response.output_item.added", "output_index": ev.Index, "item": item,
 		}); err != nil {
 			return err
 		}
 		if b.kind == protocol.KindText {
-			return e.send("content_part.added", map[string]any{
-				"type": "content_part.added", "item_id": b.itemID, "output_index": ev.Index,
+			return e.send("response.content_part.added", map[string]any{
+				"type": "response.content_part.added", "item_id": b.itemID, "output_index": ev.Index,
 				"content_index": 0, "part": map[string]any{"type": "output_text", "text": "", "annotations": []any{}},
 			})
 		}
@@ -273,14 +274,14 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 		}
 		switch b.kind {
 		case protocol.KindText:
-			if err := e.send("content_part.done", map[string]any{
-				"type": "content_part.done", "item_id": b.itemID, "output_index": ev.Index,
+			if err := e.send("response.content_part.done", map[string]any{
+				"type": "response.content_part.done", "item_id": b.itemID, "output_index": ev.Index,
 				"content_index": 0, "part": map[string]any{"type": "output_text", "text": b.text.String(), "annotations": []any{}},
 			}); err != nil {
 				return err
 			}
-			return e.send("output_item.done", map[string]any{
-				"type": "output_item.done", "output_index": ev.Index,
+			return e.send("response.output_item.done", map[string]any{
+				"type": "response.output_item.done", "output_index": ev.Index,
 				"item": map[string]any{
 					"id": b.itemID, "type": "message", "role": "assistant", "status": "completed",
 					"content": []any{map[string]any{"type": "output_text", "text": b.text.String(), "annotations": []any{}}},
@@ -293,8 +294,8 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			}); err != nil {
 				return err
 			}
-			return e.send("output_item.done", map[string]any{
-				"type": "output_item.done", "output_index": ev.Index,
+			return e.send("response.output_item.done", map[string]any{
+				"type": "response.output_item.done", "output_index": ev.Index,
 				"item": map[string]any{
 					"id": b.itemID, "type": "function_call", "status": "completed",
 					"call_id": b.toolCallID, "name": b.toolName,
@@ -302,8 +303,8 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 				},
 			})
 		default:
-			return e.send("output_item.done", map[string]any{
-				"type": "output_item.done", "output_index": ev.Index,
+			return e.send("response.output_item.done", map[string]any{
+				"type": "response.output_item.done", "output_index": ev.Index,
 				"item": map[string]any{"id": b.itemID, "type": "reasoning", "status": "completed", "summary": []any{}},
 			})
 		}
@@ -339,7 +340,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			"response": map[string]any{
 				"id": e.respID, "object": "response", "status": "completed",
 				"model": orDefault(e.model, "agw"), "output": output,
-				"usage": map[string]any{"input_tokens": ev.Usage.Input, "output_tokens": ev.Usage.Output},
+				"usage": map[string]any{"input_tokens": ev.Usage.Input, "output_tokens": ev.Usage.Output, "total_tokens": ev.Usage.Input + ev.Usage.Output},
 			},
 		})
 	case protocol.EvStreamError:
