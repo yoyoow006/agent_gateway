@@ -1,7 +1,7 @@
 # fix-responses-total-tokens
 
 模式: 标准
-状态: 待验证
+状态: 待归档
 
 ## Why
 
@@ -19,6 +19,7 @@ ERROR: stream disconnected before completion: failed to parse ResponseCompleted:
 
 - `internal/protocol/openairesponses/request.go`：`wireUsage` 增加 `TotalTokens` 字段；`BuildResponse` 填充 `total_tokens = Input + Output`。
 - `internal/protocol/openairesponses/stream.go`：流式 `response.completed` 事件的 usage 增加 `total_tokens = Input + Output`。
+- `internal/protocol/openairesponses/stream.go`（验收暴露的同族第二根因，见 design D6）：编码器 `output_item.added/done`、`content_part.added/done` 四组事件名统一补 `response.` 前缀（SSE 事件名与 data.type 一致）——原名被 Codex 按官方枚举静默丢弃，item 永不激活，回答文本全部丢失；解码器对 item 事件做带/不带前缀双名兼容（原生 OpenAI/智谱流带前缀）。
 - 黄金样例与单元测试更新：锁定流式与非流式两处 usage 均含 `total_tokens` 且等于输入输出之和（TDD，先红后绿）。
 - 不改 IR `protocol.Usage`（OpenAI 语义 total = input + output，编码边界计算即可）；不改解码逻辑与透传路径。
 
