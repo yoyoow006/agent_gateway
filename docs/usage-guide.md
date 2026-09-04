@@ -53,10 +53,52 @@ echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 agw --help
 ```
 
-> 网关仓库根目录的识别：命令从当前目录向上探测 `config/default.toml` 或 `go.mod`；
-> 也可以用 `--root <目录>` 或环境变量 `AGW_ROOT` 显式指定。下文均假设你在仓库根目录执行。
+> 关于"放 PATH 之后从任意目录启动时，agw 读哪份配置"——见下一节 [2.3](#23-网关根与配置发现)。
 
-### 2.3 编译验证（开发者）
+### 2.3 网关根与配置发现
+
+agw 启动时**不**根据自身二进制位置（如 `/usr/local/bin/agw`、`~/bin/agw`）找配置；
+配置始终来自**网关仓库根**。根的发现按以下顺序：
+
+| 优先级 | 方式 | 说明 |
+|---|---|---|
+| 1 | `agw --root <dir> <cmd>` 全局 flag | 直接使用 `<dir>`；目录里必须含 `config/` 子目录（否则启动失败并提示"不是有效网关仓库"） |
+| 2 | 环境变量 `AGW_ROOT=<dir>` | 同上校验 `<dir>/config` 存在；适合在 shell rc 里 `export AGW_ROOT=/path/to/repo` 持久锁定 |
+| 3 | **当前工作目录 (cwd) 向上探测**（默认） | 从 cwd 开始逐级向上找 `config/default.toml` 或 `go.mod`；找到就用这个目录当仓库根；找到文件系统根还没找到就**报错退出**（不会"误读一个错的配置"） |
+
+找到网关根后，再按以下顺序合并配置（后者覆盖前者）：
+
+```
+config/default.toml   ←   config/local.toml（密钥，0600，gitignore）   ←   projects/<名>/agw.toml（项目覆盖）
+```
+
+**为什么这么设计**：网关根 = 配置根，二进制只是入口。`agw` 放 `/usr/local/bin/`、`/opt/agw/bin/` 还是 `~/bin/` 都不影响——关键是**你在哪个目录执行 `agw start`**，或者显式传 `--root` / `AGW_ROOT` 锁定。这样多项目共享一个网关仓库（`projects/` 子树）、不同终端从各自 cwd 启动都能各自解析到正确的根。
+
+**典型用法**：
+
+```bash
+# 1. 在网关仓库根目录启动（推荐；所有 projects/ 子树都能被管理）
+cd /path/to/agent_gateway
+agw start
+
+# 2. 从子目录启动（向上探测）
+cd /path/to/agent_gateway/projects/demo
+agw start     # 向上找到 <网关根>，pidfile/log 仍写在 <网关根>/.run/
+
+# 3. 从任意位置启动（显式指定）
+AGW_ROOT=/path/to/agent_gateway agw start
+# 或：
+agw --root /path/to/agent_gateway start
+```
+
+**如何判断当前用的根**：
+
+- `agw status` 在正确根里会输出 pidfile/监听信息；在错误根里会**明确报错**（不是静默错配）
+- `agw start` 找不到根时报：`agw: 未找到网关仓库根（向上未发现 config/default.toml 或 go.mod）；请用 --root 指定`
+
+**与 PATH 无关**——只要 `agw` 在 `$PATH` 里、cwd 能在向上探测时找到 `config/default.toml`（或 `go.mod`），就一切正常；否则显式传 `--root` / `AGW_ROOT` 锁定。
+
+### 2.4 编译验证（开发者）
 
 ```bash
 go build ./... && go vet ./... && go test -race ./...   # 应全绿
