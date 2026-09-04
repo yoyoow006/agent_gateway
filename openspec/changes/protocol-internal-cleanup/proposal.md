@@ -18,7 +18,7 @@
 
 - `internal/protocol/openaichat/stream.go`：chat 流式解码器增加 tool-call index 容错启发式（无 index + 新 ID → 新键；缺 index + ID 空/重复 → 坍缩到最后键）
 - `internal/protocol/openaichat/openaichat_test.go`：新增 `TestStreamDecoderToolCallMissingIndex`
-- 新建 `internal/protocol/internal/errdef.go`：`MapHTTPStatusToErrorType(status) (type, code string)`
+- 新建 `internal/protocol/internal/errdef.go`：三协议各自等价的状态映射（`ErrorTypeOpenAIChat` / `ErrorTypeAnthropic` / `ErrorCodeResponses`；原设想的统一 MapHTTPStatusToErrorType 会改变 529/413 等取值，故按协议分表实现，零行为变化）
 - 新建 `internal/protocol/internal/common.go`：`OrDefault`、`FormatErrorBody`、`ParseMessageField`
 - `internal/protocol/anthropic/{codec,request}.go`、`openaichat/{codec,request}.go`、`openairesponses/{codec,request}.go`、`anthropic/stream.go`、`openaichat/stream.go`、`openairesponses/stream.go`：调用点替换
 - `internal/protocol/ir.go`：删除 `Event.ErrStatus` 字段
@@ -28,7 +28,7 @@
 ## Impact
 
 - 变更文件：4 codec 包 + IR + forward.go + 新建 internal/protocol/internal/ + 新建 docs/protocol-flow.md + 测试文件
-- 行为影响：P1-1 容错仅在上游缺 index 时生效，正常路径零变化；P2-4/P2-5 零行为变化；P4 纯文档
+- 行为影响：P1-1 容错仅在上游缺 index 时生效，正常路径零变化；P2-4 除平铺 message 容错（ParseErrorMessage 额外接受顶层 `{"message":...}`，属有意防御）外零行为变化；P2-5 零行为变化；P4 纯文档
 - 测试影响：1 新测试用例；现有错误/流式测试守护 P2-4 行为等价
 - 风险等级：低。P1-1 是纯防御增强，P2-4 是行为等价重构，P2-5 是死字段删除，P4 是文档
 

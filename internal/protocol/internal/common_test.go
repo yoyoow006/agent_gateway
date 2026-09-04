@@ -49,3 +49,30 @@ func TestFormatErrorBody(t *testing.T) {
 		t.Errorf("\nwant %s\n got %s", want, got)
 	}
 }
+
+func TestErrorTypeOpenAIChat(t *testing.T) {
+	cases := map[int]string{429: "rate_limit_error", 400: "invalid_request_error", 404: "invalid_request_error", 500: "server_error", 529: "server_error", 200: "server_error"}
+	for s, want := range cases {
+		if got := ErrorTypeOpenAIChat(s); got != want {
+			t.Errorf("chat %d = %q, want %q", s, got, want)
+		}
+	}
+}
+
+func TestErrorTypeAnthropic(t *testing.T) {
+	cases := map[int]string{400: "invalid_request_error", 413: "invalid_request_error", 422: "invalid_request_error", 401: "authentication_error", 403: "authentication_error", 404: "not_found_error", 429: "rate_limit_error", 529: "overloaded_error", 500: "api_error", 502: "api_error", 302: "api_error"}
+	for s, want := range cases {
+		if got := ErrorTypeAnthropic(s); got != want {
+			t.Errorf("anthropic %d = %q, want %q", s, got, want)
+		}
+	}
+}
+
+func TestErrorCodeResponses(t *testing.T) {
+	cases := map[int]string{429: "rate_limit_exceeded", 400: "invalid_request_error", 500: "server_error", 529: "server_error"}
+	for s, want := range cases {
+		if got := ErrorCodeResponses(s); got != want {
+			t.Errorf("responses %d = %q, want %q", s, got, want)
+		}
+	}
+}

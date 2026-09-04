@@ -54,32 +54,12 @@ func ParseError(status int, body []byte) string {
 	return fmt.Sprintf("anthropic 上游返回 %d", status)
 }
 
-// errorType 把 HTTP 状态映射为 anthropic 错误类型。
-func errorType(status int) string {
-	switch {
-	case status == 400 || status == 413 || status == 422:
-		return "invalid_request_error"
-	case status == 401 || status == 403:
-		return "authentication_error"
-	case status == 404:
-		return "not_found_error"
-	case status == 429:
-		return "rate_limit_error"
-	case status == 529:
-		return "overloaded_error"
-	case status >= 500:
-		return "api_error"
-	default:
-		return "api_error"
-	}
-}
-
 // BuildError 构造 anthropic 格式错误体。
 func BuildError(status int, msg string) []byte {
 	return internal.FormatErrorBody(map[string]any{
 		"type": "error",
 		"error": map[string]any{
-			"type":    errorType(status),
+			"type":    internal.ErrorTypeAnthropic(status),
 			"message": msg,
 		},
 	})

@@ -62,8 +62,8 @@ func (s *Server) handleForward(clientProto config.Protocol) func(http.ResponseWr
 //	│ 同协议：透传 body（仅改写 model）                      │
 //	│ 跨协议：ParseRequest→IR（model_map）→BuildRequest    │
 //	└────────────────────────────────────────────────────┘
-//	  │ 传输失败/401/403/408/429/5xx/529 → 记失败，换下一家 ↺
-//	  │ 4xx 其他 → 原样/翻译回传，不计失败，终止
+//	  │ 传输失败/401/403/408/429/500/502/503/504/529 → 记失败，换下一家 ↺
+//	  │ 其余状态码（含 501/505 等非清单 5xx）→ 原样/翻译回传，不计失败，终止
 //	  ▼ 2xx
 //	relaySuccess：同协议 copyStream 字节透传；
 //	          跨协议 SSE→translateStream（解码→custom 打标→编码），

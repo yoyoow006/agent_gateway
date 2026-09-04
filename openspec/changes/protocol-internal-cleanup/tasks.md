@@ -39,3 +39,12 @@
 - P1-1/P2-5/P2-4 由并行会话实现（ca8c5a7/6cf978b/0cd5904），本会话逐项复核：两个 ToolCallMissingIndex 测试 PASS、`grep -rn ErrStatus --include=*.go` 零命中、私有 orDefault 零残留（internal 包接管）、`go test -count=1 ./...` 11 包全绿。
 - P4 本会话完成：docs/protocol-flow.md（路径/矩阵/事件对照/工具往返/usage）、forward.go ASCII 流程图、gofmt -l 清零（含并行会话遗留的 internal 包两文件）、git diff --check 干净。
 - 状态字段曾被改回"待确认计划"与已实现进度矛盾，已纠回"构建中"（四件套提交 c86174c 原始即为构建中）。
+
+## 审查处置（2026-09-04，reviewer 综合审查 2 Important + 6 Minor）
+
+- F1（Important，混合形态拆块）resolved：resolveToolKey 的 Index 分支补登记 idToChat；新增 TestStreamDecoderMixedIndexThenIDOnly 先红（复现双块+重复ID+空name）后绿；既有两容错测试维持绿。
+- F2（Important，4.1-4.4 虚假完成）resolved：补建 errdef.go（三协议分表：ErrorTypeOpenAIChat/ErrorTypeAnthropic/ErrorCodeResponses，统一单函数会改 529/413 取值故按协议等价），替换三处调用、删除私有 errorType/errorCode；proposal What Changes/Impact 回写实际交付与平铺 message 容错披露。此前勾选时仅验 orDefault 去重属核验疏漏，已补全验证：私有映射零残留、internal 包表驱动测试全绿。
+- F3 resolved：delta 措辞对齐实现（ID 已知→复用该 ID 块；ID 空→坍缩最后活跃块；混合形态不拆块）。
+- F4/F5/F6 resolved：protocol-flow.md 修 CacheRead 静默丢弃、补 openai-chat 客户端矩阵行、failover 清单精确化（含 forward.go 注释）。
+- F7 resolved：lastChat 改为命中也更新（对齐"最近活跃"注释语义）；删除 `_ = chatIdx` 死赋值。
+- F8 resolved：proposal Impact 披露平铺 message 容错非零变化。

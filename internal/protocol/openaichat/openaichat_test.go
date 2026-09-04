@@ -405,3 +405,37 @@ func TestCustomToolDefBuild(t *testing.T) {
 		}
 	}
 }
+
+// goldenSSEMixedIndexID 混合形态：首 delta 带 index+ID，续接 delta 只带 ID 无 index
+// （审查 F1：混合形态不得把一次调用拆成重复 ID 的两个块）。
+const goldenSSEMixedIndexID = `data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_a","function":{"arguments":"{\"city\":\"北京\"}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+func TestStreamDecoderMixedIndexThenIDOnly(t *testing.T) {
+	evs := collect(t, NewStreamDecoder(strings.NewReader(goldenSSEMixedIndexID)))
+	var toolStarts []protocol.Event
+	var deltas []protocol.Event
+	for _, e := range evs {
+		if e.Kind == protocol.EvBlockStart && e.Block.Kind == protocol.KindToolUse {
+			toolStarts = append(toolStarts, e)
+		}
+		if e.Kind == protocol.EvToolCallDelta {
+			deltas = append(deltas, e)
+		}
+	}
+	if len(toolStarts) != 1 {
+		t.Fatalf("混合形态应只有 1 个 IR 工具块，实际 %d: %+v", len(toolStarts), toolStarts)
+	}
+	if toolStarts[0].Block.ToolCallID != "call_a" || toolStarts[0].Block.ToolName != "get_weather" {
+		t.Errorf("工具块 id/name 应完整: %+v", toolStarts[0].Block)
+	}
+	if len(deltas) != 1 || deltas[0].Index != toolStarts[0].Index {
+		t.Errorf("续接 delta 应归属同一块: deltas=%+v block=%+v", deltas, toolStarts[0])
+	}
+}

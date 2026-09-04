@@ -502,21 +502,10 @@ func ParseError(status int, body []byte) string {
 func BuildError(status int, msg string) []byte {
 	return internal.FormatErrorBody(map[string]any{
 		"error": map[string]any{
-			"code":    errorCode(status),
+			"code":    internal.ErrorCodeResponses(status),
 			"message": msg,
 		},
 	})
-}
-
-func errorCode(status int) string {
-	switch {
-	case status == 429:
-		return "rate_limit_exceeded"
-	case status >= 400 && status < 500:
-		return "invalid_request_error"
-	default:
-		return "server_error"
-	}
 }
 
 // flattenAdditionalTools 把 additional_tools 的 namespace 树展开为点连名扁平 ToolDef。

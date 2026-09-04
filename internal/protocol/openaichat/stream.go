@@ -238,8 +238,7 @@ func (d *streamDecoder) Next() (protocol.Event, error) {
 			d.pending = append(d.pending, protocol.Event{Kind: protocol.EvThinkingDelta, Index: d.curIdx, Text: c.Delta.ReasoningContent})
 		}
 		for _, tc := range c.Delta.ToolCalls {
-			chatIdx, irIdx, isNew := d.resolveToolKey(tc)
-			_ = chatIdx
+			_, irIdx, isNew := d.resolveToolKey(tc)
 			if isNew {
 				d.closeBlock()
 				d.curIdx = irIdx
@@ -292,16 +291,22 @@ func (d *streamDecoder) closeBlock() {
 
 // resolveToolKey 把 chat tool_calls 项解析为 (chat 键, IR 块索引, 是否新块)。
 // 借鉴 cc-switch resolve_tool_key_without_index 启发式处理缺 index 情形：
-//   - tc.Index != nil → 用 *tc.Index（主流路径，OpenAI 官方行为）
-//   - tc.Index == nil && tc.ID 已记录 → 复用旧 chat 键与同一 IR 块
+//   - tc.Index != nil → 用 *tc.Index（主流路径，OpenAI 官方行为）；
+//     同时登记 idToChat，混合形态（首片带 index+ID、续接只带 ID）不拆块
+//   - tc.Index == nil && tc.ID 已记录 → 复用该 ID 的 chat 键与同一 IR 块
 //   - tc.Index == nil && tc.ID 新 → 分配新 chat 键 + 新 IR 块
-//   - tc.Index == nil && tc.ID 空 → 坍缩到最后已知 chat 键 + 同一 IR 块
+//   - tc.Index == nil && tc.ID 空 → 坍缩到最后活跃 chat 键（最近一次处理的工具键）+ 同一 IR 块
 //
 // 同一调用只递增一次 d.nextIdx（chat 键与 IR 块复用同一计数器，避免双递增）。
 func (d *streamDecoder) resolveToolKey(tc toolCall) (chatIdx, irIdx int, isNew bool) {
 	switch {
 	case tc.Index != nil:
 		chatIdx = *tc.Index
+		if tc.ID != "" {
+			if _, ok := d.idToChat[tc.ID]; !ok {
+				d.idToChat[tc.ID] = chatIdx
+			}
+		}
 	case tc.ID != "":
 		if k, ok := d.idToChat[tc.ID]; ok {
 			chatIdx = k
@@ -316,6 +321,7 @@ func (d *streamDecoder) resolveToolKey(tc toolCall) (chatIdx, irIdx int, isNew b
 	}
 
 	if existing, ok := d.toolIR[chatIdx]; ok {
+		d.lastChat = chatIdx // 命中也更新：坍缩目标 = 最近活跃键（与注释/design 语义一致）
 		return chatIdx, existing, false
 	}
 	irIdx = d.nextIdx
@@ -446,17 +452,6 @@ func ParseError(status int, body []byte) string {
 // BuildError 构造 chat 格式错误体。
 func BuildError(status int, msg string) []byte {
 	return internal.FormatErrorBody(map[string]any{
-		"error": map[string]any{"message": msg, "type": errorType(status)},
+		"error": map[string]any{"message": msg, "type": internal.ErrorTypeOpenAIChat(status)},
 	})
-}
-
-func errorType(status int) string {
-	switch {
-	case status == 429:
-		return "rate_limit_error"
-	case status >= 400 && status < 500:
-		return "invalid_request_error"
-	default:
-		return "server_error"
-	}
 }

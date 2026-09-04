@@ -27,13 +27,14 @@ agw /v1/messages | /v1/responses | /v1/chat/completions   ← withAuth: 令牌�
 
 - **透传优先**：客户端协议 == 供应商协议时走 `copyStream`，不做任何解析（`forward.go`）。
 - **无状态切换**：每次请求自包含完整上下文，可 failover 到任意协议供应商；custom 工具名单（`ExtractCustomTools`）随请求从 body 提取，不建会话状态。
-- **failover 语义**：首字节前失败（连接/超时/401/403/408/429/5xx/529）换下一家重放；流中失败回错误由 agent 自带重试。
+- **failover 语义**：首字节前失败（连接/超时/401/403/408/429/500/502/503/504/529）换下一家重放；其余状态码（含 501/505 等非清单 5xx）原样回传并终止链；流中失败回错误由 agent 自带重试。
 
 ## 2. 转换矩阵（客户端 × 供应商）
 
 | 客户端 \ 供应商 | anthropic | openai-chat | openai-responses |
 |---|---|---|---|
 | **anthropic**（Claude Code） | 透传 | 翻译：IR←chat 编解码 | 翻译：IR←responses 编解码 |
+| **openai-chat** | 翻译：IR←anthropic 编解码 | 透传 | 翻译：IR←responses 编解码 |
 | **openai-responses**（Codex） | 翻译：IR←anthropic 编解码 | 翻译：IR←chat 编解码 | 透传 |
 
 每个 codec 六项能力：请求解析/构建、非流式响应解析/构建、SSE 流式解码/编码（`protocol.Codec` 接口）。
@@ -70,5 +71,5 @@ agw /v1/messages | /v1/responses | /v1/chat/completions   ← withAuth: 令牌�
 |---|---|---|---|
 | Input | `input_tokens` | `input_tokens` | `prompt_tokens` |
 | Output | `output_tokens` | `output_tokens` | `completion_tokens` |
-| CacheRead | `cache_read_input_tokens` | —（丢弃告警） | — |
+| CacheRead | `cache_read_input_tokens` | —（静默丢弃） | — |
 | 派生 | — | `total_tokens = input + output`（必填，Codex 严格校验） | — |
