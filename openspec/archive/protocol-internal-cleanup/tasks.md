@@ -33,7 +33,7 @@
 ## 6. 收尾
 
 - [x] 6.1 提交（按职责单元：P1-1 一个 commit，P2-5 一个 commit，P2-4 一个 commit，P4 一个 commit）；状态置`待验证`，报告用户。
-- [ ] 6.2 Verify 通过后 no-ff 合并 main、Archive。
+- [x] 6.2 Verify 通过后 no-ff 合并 main、Archive（综合审查 2 Important + 6 Minor 全处置，差异复审解除阻断，2026-09-04）。
 ## 完成证据（2026-09-04 复核续作）
 
 - P1-1/P2-5/P2-4 由并行会话实现（ca8c5a7/6cf978b/0cd5904），本会话逐项复核：两个 ToolCallMissingIndex 测试 PASS、`grep -rn ErrStatus --include=*.go` 零命中、私有 orDefault 零残留（internal 包接管）、`go test -count=1 ./...` 11 包全绿。

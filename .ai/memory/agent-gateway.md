@@ -19,3 +19,7 @@
 ## 2026-09-03 · 跨项目对比方法论纠偏
 **坑**：拿 cc-switch（Rust 重度优化、Codex 单客户端三向翻译）的实现模式直接对比 agent_gateway（Go 全互译 IR + codec 八方法），把"流截断必须发协议终止帧"列为 P0 缺陷——实际上 `forward.go:414-416` 注释与 `TestTranslatedStreamTruncationEmitsError`（断言不含 `message_stop`）显式锁定"截断 = 错误帧 + 不收尾"为有意设计（failover + agent 重试依赖流中断信号，STR-01 已 resolved）。
 **解**：跨项目对比时，报告"对方有我们没有"前必须查 `.ai-local/reviews/` 与 OpenSpec 历史决议——本仓可能有相反的显式回归测试；不要假设对方是默认基线。判别标准：① 检查 `.ai-local/reviews/*/findings-ledger.md` 与 `delta-review.md` 是否已 resolved；② 检查仓库显式回归测试断言（如 `if strings.Contains(out, "event: message_stop") { t.Fatalf(...) }` 反向断言）；③ 检查源文件顶部注释的设计意图。下次跨项目对比报告里若再出现"P0 缺陷"，必须先给出复现证据（手工或测试）而不是仅靠"主流 SDK 可能 X"的推断。
+
+## 2026-09-04 · 来源变更 protocol-internal-cleanup
+**坑**：chat 流式 tool_calls 键归位不能只看 index——部分中转不发送 index，且存在混合形态（首片带 index+ID、续接只带 ID）；若 Index 分支不登记 idToChat，一次调用会被拆成重复 ID + 空 name 双块（P1-1 首版回归，审查探针抓获）。
+**解**：resolveToolKey 三分支启发式（Index 用值并登记 ID→键；缺 index 时 ID 已知复用该键/新 ID 建新键/空 ID 坍缩最后活跃键），Index 分支必须登记 idToChat。教训二则：①勾选任务前要逐子项验证（errdef 漏验险些带病归档）；②错误映射下沉必须按协议分表——统一表会改 529/413 等取值。
