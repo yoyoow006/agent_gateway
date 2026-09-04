@@ -44,6 +44,16 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 
 从这一刻起：Claude Code 与 Codex 的所有请求都经过 agw。任何一家供应商限流（429）、过载（529）、超时或宕机，网关在**下一个请求**自动切到健康供应商——agent 与正在运行的任务完全无感。
 
+### 配置速查：放 PATH 之后 agw 读哪份配置？
+
+agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）找配置——配置始终来自**网关仓库根**。根的发现按以下顺序：
+
+1. `agw --root <dir> <cmd>` 全局 flag（最高优先）
+2. 环境变量 `AGW_ROOT=<dir>`
+3. **当前工作目录向上探测** `config/default.toml` 或 `go.mod`（默认）
+
+找到根后再合并：`config/default.toml` ← `config/local.toml`（密钥）← `projects/<名>/agw.toml`（项目覆盖）。从子目录（`projects/<名>/`）或任意位置启动都行；找不到根 agw 会**明确报错**而非静默错配。详见 [docs/usage-guide.md §2.3](docs/usage-guide.md#23-网关根与配置发现)。
+
 ## 核心语义
 
 ### 不中断切换（请求边界 failover）
