@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/internal"
 )
 
 // Path 是 Responses 端点路径。
@@ -491,26 +492,20 @@ func BuildResponse(resp protocol.Response) (int, []byte) {
 
 // ParseError 提取上游错误信息。
 func ParseError(status int, body []byte) string {
-	var e struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &e); err == nil && e.Error.Message != "" {
-		return e.Error.Message
+	if msg := internal.ParseErrorMessage(body); msg != "" {
+		return msg
 	}
 	return fmt.Sprintf("上游返回 %d", status)
 }
 
 // BuildError 构造 responses 格式错误体。
 func BuildError(status int, msg string) []byte {
-	body, _ := json.Marshal(map[string]any{
+	return internal.FormatErrorBody(map[string]any{
 		"error": map[string]any{
 			"code":    errorCode(status),
 			"message": msg,
 		},
 	})
-	return body
 }
 
 func errorCode(status int) string {

@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/internal"
 )
 
 // ---- 响应（非流式）----
@@ -273,7 +274,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 		payload := map[string]any{
 			"type": "message_start",
 			"message": map[string]any{
-				"id": e.msgID, "type": "message", "role": "assistant", "model": orDefault(ev.Model, "agw"),
+				"id": e.msgID, "type": "message", "role": "assistant", "model": internal.OrDefault(ev.Model, "agw"),
 				"content": []any{},
 				"usage": map[string]any{
 					"input_tokens": ev.Usage.Input, "output_tokens": 1,
@@ -333,7 +334,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 	case protocol.EvStreamError:
 		return e.sendJSON("error", map[string]any{
 			"type":  "error",
-			"error": map[string]any{"type": "api_error", "message": orDefault(ev.ErrMessage, "上游流错误")},
+			"error": map[string]any{"type": "api_error", "message": internal.OrDefault(ev.ErrMessage, "上游流错误")},
 		})
 	}
 	return nil
@@ -353,11 +354,4 @@ func (e *streamEncoder) sendJSON(name string, payload any) error {
 		return err
 	}
 	return e.w.Send(name, string(data))
-}
-
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
 }

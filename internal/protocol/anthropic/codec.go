@@ -1,12 +1,12 @@
 package anthropic
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/internal"
 )
 
 // Codec 把包函数装配为 protocol.Codec。
@@ -48,14 +48,8 @@ func (Codec) BuildError(status int, msg string) []byte { return BuildError(statu
 
 // ParseError 提取上游错误信息。
 func ParseError(status int, body []byte) string {
-	var e struct {
-		Error struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &e); err == nil && e.Error.Message != "" {
-		return e.Error.Message
+	if msg := internal.ParseErrorMessage(body); msg != "" {
+		return msg
 	}
 	return fmt.Sprintf("anthropic 上游返回 %d", status)
 }
@@ -82,12 +76,11 @@ func errorType(status int) string {
 
 // BuildError 构造 anthropic 格式错误体。
 func BuildError(status int, msg string) []byte {
-	body, _ := json.Marshal(map[string]any{
+	return internal.FormatErrorBody(map[string]any{
 		"type": "error",
 		"error": map[string]any{
 			"type":    errorType(status),
 			"message": msg,
 		},
 	})
-	return body
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/internal"
 )
 
 // ---- 流式解码：Responses SSE → IR 事件 ----
@@ -192,7 +193,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			"type": "response.created",
 			"response": map[string]any{
 				"id": e.respID, "object": "response", "status": "in_progress",
-				"model": orDefault(ev.Model, "agw"), "output": []any{},
+				"model": internal.OrDefault(ev.Model, "agw"), "output": []any{},
 			},
 		})
 	case protocol.EvBlockStart:
@@ -316,7 +317,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			}
 			if err := e.send("response.function_call_arguments.done", map[string]any{
 				"type": "response.function_call_arguments.done", "item_id": b.itemID,
-				"output_index": ev.Index, "arguments": orDefault(b.args.String(), "{}"),
+				"output_index": ev.Index, "arguments": internal.OrDefault(b.args.String(), "{}"),
 			}); err != nil {
 				return err
 			}
@@ -325,7 +326,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 				"item": map[string]any{
 					"id": b.itemID, "type": "function_call", "status": "completed",
 					"call_id": b.toolCallID, "name": b.toolName,
-					"arguments": orDefault(b.args.String(), "{}"),
+					"arguments": internal.OrDefault(b.args.String(), "{}"),
 				},
 			})
 		default:
@@ -359,7 +360,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 				output = append(output, map[string]any{
 					"id": b.itemID, "type": "function_call", "status": "completed",
 					"call_id": b.toolCallID, "name": b.toolName,
-					"arguments": orDefault(b.args.String(), "{}"),
+					"arguments": internal.OrDefault(b.args.String(), "{}"),
 				})
 			case protocol.KindThinking:
 				output = append(output, map[string]any{
@@ -373,7 +374,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			"type": "response.completed",
 			"response": map[string]any{
 				"id": e.respID, "object": "response", "status": "completed",
-				"model": orDefault(e.model, "agw"), "output": output,
+				"model": internal.OrDefault(e.model, "agw"), "output": output,
 				"usage": map[string]any{"input_tokens": ev.Usage.Input, "output_tokens": ev.Usage.Output, "total_tokens": ev.Usage.Input + ev.Usage.Output},
 			},
 		})
@@ -382,7 +383,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 			"type": "response.failed",
 			"response": map[string]any{
 				"id": e.respID, "status": "failed",
-				"error": map[string]any{"code": "agw_upstream_error", "message": orDefault(ev.ErrMessage, "上游流错误")},
+				"error": map[string]any{"code": "agw_upstream_error", "message": internal.OrDefault(ev.ErrMessage, "上游流错误")},
 			},
 		})
 	}
@@ -403,11 +404,4 @@ func (e *streamEncoder) send(name string, payload any) error {
 		return err
 	}
 	return e.w.Send(name, string(data))
-}
-
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
 }

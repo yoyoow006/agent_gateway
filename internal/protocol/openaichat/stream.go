@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/internal"
 )
 
 // ---- 非流式响应 ----
@@ -399,7 +400,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 		e.ended = true
 		return e.w.SendData("[DONE]")
 	case protocol.EvStreamError:
-		payload, _ := json.Marshal(map[string]any{"error": map[string]any{"message": orDefault(ev.ErrMessage, "上游流错误")}})
+		payload, _ := json.Marshal(map[string]any{"error": map[string]any{"message": internal.OrDefault(ev.ErrMessage, "上游流错误")}})
 		return e.w.SendData(string(payload))
 	}
 	return nil
@@ -434,34 +435,19 @@ func (e *streamEncoder) chunk(delta map[string]any, finish *string) error {
 	return e.w.SendData(string(data))
 }
 
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
-
-// ---- 错误映射 ----
-
 // ParseError 提取上游错误信息。
 func ParseError(status int, body []byte) string {
-	var e struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &e); err == nil && e.Error.Message != "" {
-		return e.Error.Message
+	if msg := internal.ParseErrorMessage(body); msg != "" {
+		return msg
 	}
 	return fmt.Sprintf("上游返回 %d", status)
 }
 
 // BuildError 构造 chat 格式错误体。
 func BuildError(status int, msg string) []byte {
-	body, _ := json.Marshal(map[string]any{
+	return internal.FormatErrorBody(map[string]any{
 		"error": map[string]any{"message": msg, "type": errorType(status)},
 	})
-	return body
 }
 
 func errorType(status int) string {
