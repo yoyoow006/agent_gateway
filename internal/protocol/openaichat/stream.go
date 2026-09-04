@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/internal"
 )
 
 // ---- 非流式响应 ----
@@ -154,20 +155,28 @@ type streamChunk struct {
 }
 
 type streamDecoder struct {
-	r       *protocol.SSEReader
-	pending []protocol.Event
-	started bool
-	nextIdx int
-	curIdx  int // 当前打开的块索引，-1 表示无
-	curKind protocol.PartKind
-	toolIR  map[int]int // chat tool_calls.index → IR 块索引
-	finish  *string
-	usage   *wireUsage
+	r        *protocol.SSEReader
+	pending  []protocol.Event
+	started  bool
+	nextIdx  int
+	curIdx   int // 当前打开的块索引，-1 表示无
+	curKind  protocol.PartKind
+	toolIR   map[int]int    // chat tool_calls.index → IR 块索引
+	idToChat map[string]int // tool id → chat 键，用于缺 index 时反查
+	lastChat int            // 最近一次成功处理的 chat 键；缺 index+空 ID 时坍缩至此
+	finish   *string
+	usage    *wireUsage
 }
 
 // NewStreamDecoder 构造解码器。
 func NewStreamDecoder(r io.Reader) protocol.StreamDecoder {
-	return &streamDecoder{r: protocol.NewSSEReader(r), curIdx: -1, toolIR: map[int]int{}}
+	return &streamDecoder{
+		r:        protocol.NewSSEReader(r),
+		curIdx:   -1,
+		toolIR:   map[int]int{},
+		idToChat: map[string]int{},
+		lastChat: -1,
+	}
 }
 
 func (d *streamDecoder) Next() (protocol.Event, error) {
@@ -229,16 +238,9 @@ func (d *streamDecoder) Next() (protocol.Event, error) {
 			d.pending = append(d.pending, protocol.Event{Kind: protocol.EvThinkingDelta, Index: d.curIdx, Text: c.Delta.ReasoningContent})
 		}
 		for _, tc := range c.Delta.ToolCalls {
-			chatIdx := 0
-			if tc.Index != nil {
-				chatIdx = *tc.Index
-			}
-			irIdx, seen := d.toolIR[chatIdx]
-			if !seen {
+			_, irIdx, isNew := d.resolveToolKey(tc)
+			if isNew {
 				d.closeBlock()
-				irIdx = d.nextIdx
-				d.nextIdx++
-				d.toolIR[chatIdx] = irIdx
 				d.curIdx = irIdx
 				d.curKind = protocol.KindToolUse
 				d.pending = append(d.pending, protocol.Event{
@@ -285,6 +287,48 @@ func (d *streamDecoder) closeBlock() {
 		d.curIdx = -1
 		d.curKind = ""
 	}
+}
+
+// resolveToolKey 把 chat tool_calls 项解析为 (chat 键, IR 块索引, 是否新块)。
+// 借鉴 cc-switch resolve_tool_key_without_index 启发式处理缺 index 情形：
+//   - tc.Index != nil → 用 *tc.Index（主流路径，OpenAI 官方行为）；
+//     同时登记 idToChat，混合形态（首片带 index+ID、续接只带 ID）不拆块
+//   - tc.Index == nil && tc.ID 已记录 → 复用该 ID 的 chat 键与同一 IR 块
+//   - tc.Index == nil && tc.ID 新 → 分配新 chat 键 + 新 IR 块
+//   - tc.Index == nil && tc.ID 空 → 坍缩到最后活跃 chat 键（最近一次处理的工具键）+ 同一 IR 块
+//
+// 同一调用只递增一次 d.nextIdx（chat 键与 IR 块复用同一计数器，避免双递增）。
+func (d *streamDecoder) resolveToolKey(tc toolCall) (chatIdx, irIdx int, isNew bool) {
+	switch {
+	case tc.Index != nil:
+		chatIdx = *tc.Index
+		if tc.ID != "" {
+			if _, ok := d.idToChat[tc.ID]; !ok {
+				d.idToChat[tc.ID] = chatIdx
+			}
+		}
+	case tc.ID != "":
+		if k, ok := d.idToChat[tc.ID]; ok {
+			chatIdx = k
+		} else {
+			chatIdx = d.nextIdx
+			d.idToChat[tc.ID] = chatIdx
+		}
+	case d.lastChat >= 0:
+		chatIdx = d.lastChat
+	default:
+		chatIdx = d.nextIdx
+	}
+
+	if existing, ok := d.toolIR[chatIdx]; ok {
+		d.lastChat = chatIdx // 命中也更新：坍缩目标 = 最近活跃键（与注释/design 语义一致）
+		return chatIdx, existing, false
+	}
+	irIdx = d.nextIdx
+	d.nextIdx++
+	d.toolIR[chatIdx] = irIdx
+	d.lastChat = chatIdx
+	return chatIdx, irIdx, true
 }
 
 // ---- 流式编码：IR 事件 → chat SSE ----
@@ -362,7 +406,7 @@ func (e *streamEncoder) Encode(ev protocol.Event) error {
 		e.ended = true
 		return e.w.SendData("[DONE]")
 	case protocol.EvStreamError:
-		payload, _ := json.Marshal(map[string]any{"error": map[string]any{"message": orDefault(ev.ErrMessage, "上游流错误")}})
+		payload, _ := json.Marshal(map[string]any{"error": map[string]any{"message": internal.OrDefault(ev.ErrMessage, "上游流错误")}})
 		return e.w.SendData(string(payload))
 	}
 	return nil
@@ -397,43 +441,17 @@ func (e *streamEncoder) chunk(delta map[string]any, finish *string) error {
 	return e.w.SendData(string(data))
 }
 
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
-
-// ---- 错误映射 ----
-
 // ParseError 提取上游错误信息。
 func ParseError(status int, body []byte) string {
-	var e struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &e); err == nil && e.Error.Message != "" {
-		return e.Error.Message
+	if msg := internal.ParseErrorMessage(body); msg != "" {
+		return msg
 	}
 	return fmt.Sprintf("上游返回 %d", status)
 }
 
 // BuildError 构造 chat 格式错误体。
 func BuildError(status int, msg string) []byte {
-	body, _ := json.Marshal(map[string]any{
-		"error": map[string]any{"message": msg, "type": errorType(status)},
+	return internal.FormatErrorBody(map[string]any{
+		"error": map[string]any{"message": msg, "type": internal.ErrorTypeOpenAIChat(status)},
 	})
-	return body
-}
-
-func errorType(status int) string {
-	switch {
-	case status == 429:
-		return "rate_limit_error"
-	case status >= 400 && status < 500:
-		return "invalid_request_error"
-	default:
-		return "server_error"
-	}
 }

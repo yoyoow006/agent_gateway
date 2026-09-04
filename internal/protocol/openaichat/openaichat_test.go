@@ -190,6 +190,99 @@ func TestStreamDecoder(t *testing.T) {
 	}
 }
 
+// TestStreamDecoderToolCallMissingIndexDistinctIDs 验证上游不发送 index 但 ID 唯一时，
+// 解码器按 cc-switch 风格启发式分配独立 IR 块而非默认坍缩冲突。
+const goldenSSEMissingIndexDistinctIDs = `data: {"id":"c1","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_a","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_a","function":{"arguments":"{\"city\":\"北京\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_b","type":"function","function":{"name":"get_time","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_b","function":{"arguments":"{\"tz\":\"Asia\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+func TestStreamDecoderToolCallMissingIndexDistinctIDs(t *testing.T) {
+	evs := collect(t, NewStreamDecoder(strings.NewReader(goldenSSEMissingIndexDistinctIDs)))
+	// 应合成 2 个独立 IR 工具块：每个块有 start + delta + stop
+	var toolStarts []protocol.Event
+	var toolStops []int
+	for _, e := range evs {
+		if e.Kind == protocol.EvBlockStart && e.Block.Kind == protocol.KindToolUse {
+			toolStarts = append(toolStarts, e)
+		}
+		if e.Kind == protocol.EvBlockStop {
+			toolStops = append(toolStops, e.Index)
+		}
+	}
+	if len(toolStarts) != 2 {
+		t.Fatalf("应合成 2 个独立 IR 工具块，实际 %d:\n%v", len(toolStarts), toolStarts)
+	}
+	if toolStarts[0].Block.ToolCallID != "call_a" || toolStarts[0].Block.ToolName != "get_weather" {
+		t.Errorf("首 tool 应为 call_a/get_weather，实际 %+v", toolStarts[0])
+	}
+	if toolStarts[1].Block.ToolCallID != "call_b" || toolStarts[1].Block.ToolName != "get_time" {
+		t.Errorf("次 tool 应为 call_b/get_time，实际 %+v", toolStarts[1])
+	}
+	if toolStarts[0].Index == toolStarts[1].Index {
+		t.Errorf("两 tool 应分配不同 IR 块索引，实际均为 %d", toolStarts[0].Index)
+	}
+	if len(toolStops) < 2 || toolStops[0] != toolStarts[0].Index || toolStops[1] != toolStarts[1].Index {
+		t.Errorf("每个 tool 应有独立 block_stop，实际 stops=%v", toolStops)
+	}
+}
+
+// TestStreamDecoderToolCallMissingIndexCollapsesToLast 验证缺 index 且 ID 为空的 delta
+// 归属到"最后已知 IR 工具块"而非默认坍缩到 chatIdx=0（首个工具块）——
+// 旧实现 chatIdx 默认 0 会错误归属到 call_a；新启发式应归属到最近一个 tool（call_b）。
+const goldenSSEMissingIndexCollapse = `data: {"id":"c1","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"f1","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_b","type":"function","function":{"name":"f2","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"function":{"arguments":"{\"x\":1}"}}]},"finish_reason":null}]}
+
+data: {"id":"c1","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+func TestStreamDecoderToolCallMissingIndexCollapsesToLast(t *testing.T) {
+	evs := collect(t, NewStreamDecoder(strings.NewReader(goldenSSEMissingIndexCollapse)))
+	var toolStarts []protocol.Event
+	var deltas []protocol.Event
+	for _, e := range evs {
+		if e.Kind == protocol.EvBlockStart && e.Block.Kind == protocol.KindToolUse {
+			toolStarts = append(toolStarts, e)
+		}
+		if e.Kind == protocol.EvToolCallDelta {
+			deltas = append(deltas, e)
+		}
+	}
+	if len(toolStarts) != 2 {
+		t.Fatalf("应合成 2 个独立 IR 工具块（call_a + call_b），实际 %d", len(toolStarts))
+	}
+	if toolStarts[0].Block.ToolCallID != "call_a" {
+		t.Errorf("首 IR 工具块应为 call_a，实际 %+v", toolStarts[0])
+	}
+	if toolStarts[1].Block.ToolCallID != "call_b" {
+		t.Errorf("次 IR 工具块应为 call_b，实际 %+v", toolStarts[1])
+	}
+	if len(deltas) != 1 {
+		t.Fatalf("应 1 个 tool delta（缺 index/ID 续接），实际 %d", len(deltas))
+	}
+	if deltas[0].Index != toolStarts[1].Index {
+		t.Errorf("续接 delta 应归属最后 IR 块（call_b index=%d），实际归属 index=%d",
+			toolStarts[1].Index, deltas[0].Index)
+	}
+}
+
 func TestStreamEncoderRoundTrip(t *testing.T) {
 	irEvents := []protocol.Event{
 		{Kind: protocol.EvStreamStart, Model: "gpt-5.2"},
@@ -310,5 +403,39 @@ func TestCustomToolDefBuild(t *testing.T) {
 		if tt.Function.Name == "functions.wait" && !strings.Contains(string(tt.Function.Parameters), "seconds") {
 			t.Errorf("wait schema 应透传: %s", tt.Function.Parameters)
 		}
+	}
+}
+
+// goldenSSEMixedIndexID 混合形态：首 delta 带 index+ID，续接 delta 只带 ID 无 index
+// （审查 F1：混合形态不得把一次调用拆成重复 ID 的两个块）。
+const goldenSSEMixedIndexID = `data: {"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"get_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_a","function":{"arguments":"{\"city\":\"北京\"}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+func TestStreamDecoderMixedIndexThenIDOnly(t *testing.T) {
+	evs := collect(t, NewStreamDecoder(strings.NewReader(goldenSSEMixedIndexID)))
+	var toolStarts []protocol.Event
+	var deltas []protocol.Event
+	for _, e := range evs {
+		if e.Kind == protocol.EvBlockStart && e.Block.Kind == protocol.KindToolUse {
+			toolStarts = append(toolStarts, e)
+		}
+		if e.Kind == protocol.EvToolCallDelta {
+			deltas = append(deltas, e)
+		}
+	}
+	if len(toolStarts) != 1 {
+		t.Fatalf("混合形态应只有 1 个 IR 工具块，实际 %d: %+v", len(toolStarts), toolStarts)
+	}
+	if toolStarts[0].Block.ToolCallID != "call_a" || toolStarts[0].Block.ToolName != "get_weather" {
+		t.Errorf("工具块 id/name 应完整: %+v", toolStarts[0].Block)
+	}
+	if len(deltas) != 1 || deltas[0].Index != toolStarts[0].Index {
+		t.Errorf("续接 delta 应归属同一块: deltas=%+v block=%+v", deltas, toolStarts[0])
 	}
 }

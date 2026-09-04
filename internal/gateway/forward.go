@@ -54,6 +54,21 @@ func (s *Server) handleForward(clientProto config.Protocol) func(http.ResponseWr
 }
 
 // forward 按候选链逐家尝试；首字节前失败换下一家，全败返回最后一次错误。
+//
+//	请求(body) ──→ 提取 custom 工具名单（仅 responses 客户端）
+//	  │
+//	  ▼ 按链逐家（熔断打开即跳过）
+//	┌─ attempt ──────────────────────────────────────────┐
+//	│ 同协议：透传 body（仅改写 model）                      │
+//	│ 跨协议：ParseRequest→IR（model_map）→BuildRequest    │
+//	└────────────────────────────────────────────────────┘
+//	  │ 传输失败/401/403/408/429/500/502/503/504/529 → 记失败，换下一家 ↺
+//	  │ 其余状态码（含 501/505 等非清单 5xx）→ 原样/翻译回传，不计失败，终止
+//	  ▼ 2xx
+//	relaySuccess：同协议 copyStream 字节透传；
+//	          跨协议 SSE→translateStream（解码→custom 打标→编码），
+//	                非流式→ParseResponse→BuildResponse
+//	全链失败 → relayError（最后一次真实错误，按客户端协议格式）
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto config.Protocol, profile *config.Profile, body []byte) {
 	clientCodec := codecFor(clientProto)
 	// Responses 客户端（Codex）的 custom 型工具名单：响应翻译时据此把命中名字的
