@@ -139,7 +139,6 @@ type Event struct {
 	Model      string     // EvStreamStart
 	StopReason StopReason // EvStreamEnd
 	Usage      Usage      // EvStreamStart（input 侧）/ EvStreamEnd（全量）
-	ErrStatus  int        // EvStreamError
 	ErrMessage string
 }
 
