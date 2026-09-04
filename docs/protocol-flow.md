@@ -27,6 +27,7 @@ agw /v1/messages | /v1/responses | /v1/chat/completions   ← withAuth: 令牌�
 
 - **透传优先**：客户端协议 == 供应商协议时走 `copyStream`，不做任何解析（`forward.go`）。
 - **无状态切换**：每次请求自包含完整上下文，可 failover 到任意协议供应商；custom 工具名单（`ExtractCustomTools`）随请求从 body 提取，不建会话状态。
+- **GET 单响应拉取**：仅 Codex 调用 `GET /v1/responses/{id}`（store=false 时 Codex 不走该路径）允许；同协议字节透传；跨协议供应商在尝试阶段即跳过（`forward.go:97`），避免白白消耗半开探针名额（BRK-02 回归）。
 - **failover 语义**：首字节前失败（连接/超时/401/403/408/429/500/502/503/504/529）换下一家重放；其余状态码（含 501/505 等非清单 5xx）原样回传并终止链；流中失败回错误由 agent 自带重试。
 
 ## 2. 转换矩阵（客户端 × 供应商）

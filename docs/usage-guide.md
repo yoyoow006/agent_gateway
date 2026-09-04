@@ -72,7 +72,8 @@ config/default.toml   ← config/local.toml（密钥，0600，不入 git） ← 
 ```
 
 后者覆盖前者；`config/default.toml` 是提交版示例（无密钥），首次 `agw start` 会自动在
-`config/local.toml` 生成三样东西：**admin 令牌**、**全局默认令牌**、后续项目令牌。
+`config/local.toml` 生成**admin 令牌**和**全局默认令牌**两类；
+业务项目令牌由 `agw project new <名>` 在创建时单独生成（也在 `config/local.toml`）。
 
 ### 3.2 供应商池
 
@@ -83,7 +84,7 @@ agw provider add official --protocol anthropic --base-url https://api.anthropic.
 
 # openai-chat 协议（绝大多数中转站）
 agw provider add relay --protocol openai-chat --base-url https://relay.example/v1 \
-    --api-key-env RELAY_KEY --priority 1 \
+    --api-key-env RELAY_CHAT_KEY --priority 1 \
     --model claude-sonnet-5=claude-sonnet-5-relay \
     --header X-Title=agw
 
@@ -109,7 +110,7 @@ agw provider add openai --protocol openai-responses --base-url https://api.opena
 cp .env.example .env && chmod 600 .env
 # 编辑 .env：
 #   OFFICIAL_KEY=sk-ant-xxx
-#   RELAY_KEY=sk-xxx
+#   RELAY_CHAT_KEY=sk-xxx
 ```
 
 `.env` 规则：`KEY=VALUE`、`#` 注释、可选引号、可选 `export ` 前缀；语法错误启动即报错（带行号）；
@@ -217,10 +218,14 @@ agw status                               # 各供应商状态：closed/open/half
 - 同协议永远**字节级透传**（仅替换认证/Host；配了 `model_map` 时只重写 model 字段），保真度最高。
 - 跨协议翻译覆盖：消息、工具调用与结果、base64 图片、stop_reason、usage、错误体、SSE 流式事件。
 - 明确降级：`cache_control` 跨协议丢弃（日志告警，仅影响成本）；thinking/reasoning best-effort。
-- **已知边界：Codex ≥0.149 的工具编排（`additional_tools`/namespace/custom 形态）跨协议不支持**——
-  工具定义会被丢弃并记显式告警。**给 Codex 至少配一家 openai-responses 协议供应商**即可走透传，
-  完全不受影响；Claude Code 全场景无关。
-- `count_tokens` 优先转发 anthropic 上游，不可用时本地粗估（只影响上下文预算判断）。
+- **Codex ≥0.149 跨协议工具编排（已支持，2026-09）**：Codex 的内置 exec、MCP 工具以及
+  `code_mode` 的 V8 JS 沙箱（`functions.exec`）通过 input 的 `additional_tools`（namespace
+  树内嵌 function/custom）携带；网关跨协议时做翻译：namespace 展平为点连名、function 直取 schema、
+  custom 合成 `{code:string}` schema，响应/历史还原 `custom_tool_call`（详见
+  `openspec/archive/translate-additional-tools/`）。同协议（Codex↔openai-responses）仍走字节级透传，零开销。
+- Codex 0.149+ 对 Responses 流式 `usage` 缺 `total_tokens` 严格校验（兼容处理：编码边界补 `input+output`）；
+  item/part 事件名 `response.` 前缀在编码器统一、解码器双名兼容（兼容无前缀历史流）。
+- `count_tokens` 优先转发 anthropic 上游，不可用时本地粗估（字节/4，CJK 混合场景的保守近似，只影响上下文预算判断）。
 - `GET /v1/responses/{id}` 单响应拉取未路由（禁用响应存储后 Codex 不使用该路径）。
 
 ## 10. 安全说明
@@ -240,10 +245,10 @@ agw status                               # 各供应商状态：closed/open/half
 | 503 "档案内没有启用的供应商" | 全部被 disable 或项目覆盖列表为空；`agw provider list` 检查 |
 | 429/529 频繁 | 正在故障切换；`agw status` 看哪家 open、`agw logs -f` 看切换记录；考虑加备用家 |
 | `agw start` 报 address already in use | 端口被占（错误含日志尾部）；`agw stop` 后重试，或改 `[gateway] listen` |
-| Codex 没有工具可用 | 命中的是 chat/anthropic 供应商（跨协议边界，见第 9 节）：加一家 openai-responses 供应商或 `agw switch` 到它 |
+| Codex 工具调用失败/丢工具 | Codex ≥0.149 跨协议工具编排已自动翻译（`additional_tools`/namespace/custom，见第 9 节）。若仍异常，检查目标供应商是否真支持对应工具；日志里若见"翻译降级 …"说明上游该字段无对应。 |
 | 日志里"翻译降级 cache_control …" | 正常：cache_control 跨协议丢弃，只影响缓存成本 |
 | 改了 .env 不生效 | `.env` 只在启动时加载：`agw stop && agw start` |
-| 改超时不生效 | 同名供应商的 `connect_timeout_sec`/`first_byte_timeout` 变更需重启网关 |
+| 改超时/协议/header 不生效 | 这些是 provider 字段，`agw provider add <同名>` 会自动通知网关热重载（无需重启）。`.env` 里的密钥例外——只在 `agw start` 时加载一次，改完需 `agw stop && agw start` |
 
 ## 12. 卸载与回滚
 

@@ -22,11 +22,11 @@ Codex ──config.toml base_url──────►┤  ├─ 令牌→项目
 go build -o agw ./cmd/agw
 
 # 2. 密钥写进 .env（已被 git 忽略；建议 chmod 600），供应商用环境变量名引用
-cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / RELAY_KEY
+cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / RELAY_CHAT_KEY
 ./agw provider add official --protocol anthropic --base-url https://api.anthropic.com \
     --api-key-env OFFICIAL_KEY --priority 10
 ./agw provider add relay --protocol openai-chat --base-url https://relay.example/v1 \
-    --api-key-env RELAY_KEY --priority 1 --model claude-sonnet-5=claude-sonnet-5-relay
+    --api-key-env RELAY_CHAT_KEY --priority 1 --model claude-sonnet-5=claude-sonnet-5-relay
 
 # 3. 启动网关（首次自动生成 admin/全局令牌到 config/local.toml）
 ./agw start
@@ -88,7 +88,7 @@ listen = "127.0.0.1:8787"   # 仅回环；改 0.0.0.0 启动时会显著告警
 name = "relay"
 protocol = "openai-chat"    # anthropic | openai-chat | openai-responses
 base_url = "https://relay.example/v1"
-api_key_env = "RELAY_KEY"   # 或 api_key（只应出现在 local.toml）
+api_key_env = "RELAY_CHAT_KEY"   # 或 api_key（只应出现在 local.toml）
 priority = 1                # 数字越小越优先
 enabled = true
 
@@ -153,11 +153,12 @@ gofmt -l .                                               # 应为空
 bash scripts/validate-workflow.sh --fast                 # 工作流校验
 ```
 
-架构与决策详见 `openspec/changes/add-agent-gateway/design.md`；规格见同目录 `specs/`。
+架构与决策详见 `openspec/archive/add-agent-gateway/design.md`；已合并的主规格见 `openspec/specs/`：`llm-api-routing`、`protocol-translation`、`gateway-cli`、`agent-launcher`、`project-workspace`、`risk-tiered-ai-workflow`、`shared-ai-workflow-infrastructure`。
 
 ## 已知边界
 
-- **Codex 跨协议场景的工具编排不可用（已接受边界）**：新版 Codex（实测 0.149.1）以 `additional_tools`/`namespace`/`custom` 形态在 input 中携带内置工具（exec 等）与 MCP 工具，超出 v1 的 function 型翻译面——跨协议（Codex→仅 chat/anthropic 供应商）时这些工具会被丢弃并记日志告警。**Codex 请配置 openai-responses 协议供应商**（同协议字节透传，不受影响）；Claude Code 全场景不受影响。
+- **Codex 跨协议工具编排（已支持，2026-09）**：Codex ≥0.149 的内置 exec、MCP 工具以及 `code_mode` 的 V8 JS 沙箱（`functions.exec`）通过 input 中的 `additional_tools`（namespace 树内嵌 function/custom）携带；网关在跨协议场景下做翻译：namespace 展平为点连名、function 直取 schema、custom 合成 `{code:string}` schema，响应/历史还原 `custom_tool_call`（详见 `openspec/archive/translate-additional-tools/`）。同协议（Codex↔openai-responses）仍走字节级透传，零开销。
 - Codex 的 `GET /v1/responses/{id}` 单响应拉取**未路由**（返回 404）；禁用响应存储后 Codex 不使用该路径，每请求自包含全量上下文。
-- `count_tokens` 优先转发 anthropic 上游；不可用时返回本地粗估（字节/4），误差只影响上下文预算判断。
+- Codex 0.149+ 对 Responses 流式 `usage` 缺 `total_tokens` 严格校验（兼容处理：编码边界补 `input+output`）；item/part 事件名 `response.` 前缀在编码器统一、解码器双名兼容（兼容无前缀历史流）。
+- `count_tokens` 优先转发 anthropic 上游；不可用时返回本地粗估（字节/4，CJK 混合场景的保守近似），误差只影响上下文预算判断。
 - v1 非目标：TUI/Web 控制台、主动拨测、负载均衡、Windows、计费统计、音视频多模态。
