@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -112,6 +113,9 @@ listen = "` + strings.TrimPrefix(fake.URL, "http://") + `"
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("reload 500 应返回非零退出")
+	}
+	if !errors.Is(err, ErrReloadFailed) {
+		t.Fatalf("reload 500 应映射为 ErrReloadFailed（main.go 据此退出码 2），got %v", err)
 	}
 }
 
