@@ -54,7 +54,9 @@ func saveAndReload(root string, cfg *config.Config) {
 	if err := config.SaveLocal(root, cfg); err != nil {
 		fatalf("写回 local.toml 失败: %v", err)
 	}
-	reloadIfRunning(root, cfg)
+	if _, err := reloadIfRunning(root, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "警告：%v；网关重启后生效\n", err)
+	}
 }
 
 func runProviderList(cmd *cobra.Command, args []string) {

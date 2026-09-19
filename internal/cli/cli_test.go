@@ -175,7 +175,9 @@ func TestProviderCommandsPersist(t *testing.T) {
 	// 热重载触发（伪造运行中状态：写 pidfile 为当前进程）
 	os.MkdirAll(runDir(root), 0o755)
 	os.WriteFile(pidPath(root), []byte(strconv.Itoa(os.Getpid())), 0o600)
-	reloadIfRunning(root, cfg3)
+	if _, err := reloadIfRunning(root, cfg3); err != nil {
+		t.Fatalf("provider 路径 reload 不应失败: %v", err)
+	}
 	if reloads.Load() != 1 {
 		t.Errorf("应触发一次热重载，got %d", reloads.Load())
 	}

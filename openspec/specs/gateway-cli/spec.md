@@ -62,6 +62,29 @@
 - **WHEN** 重载时 TOML 语法错误
 - **THEN** 网关继续用旧配置服务，日志记录重载失败原因，进程不退出
 
+### Requirement: 手动热重载 CLI
+`agw reload` SHALL 不写盘地向运行中网关触发热重载；网关未运行时幂等退出。退出码 SHALL 区分本地解析失败（1）、reload 请求被网关拒绝（2）与成功/幂等（0）。
+
+#### Scenario: 网关运行中且 reload 成功
+- **WHEN** 用户在网关根目录（或 `--root` 指向的目录）执行 `agw reload`，且管理端点 `POST /__agw/reload` 返回 200
+- **THEN** CLI 打印成功提示到 stdout，以退出码 0 退出，恰好 1 次 POST 请求
+
+#### Scenario: 网关未运行
+- **WHEN** 用户执行 `agw reload`，且 pidfile 不存在或对应进程已退出
+- **THEN** CLI 打印"提示：网关未运行，配置将在下次启动时生效"到 stdout，以退出码 0 退出（不发任何 HTTP 请求）
+
+#### Scenario: reload 请求失败（网络错误或非 2xx）
+- **WHEN** 网关运行中但 `POST /__agw/reload` 因网络错误、超时或返回非 2xx 而失败
+- **THEN** CLI 打印警告到 stderr，以退出码 2 退出
+
+#### Scenario: local.toml 解析失败
+- **WHEN** 用户执行 `agw reload`，且 `local.toml` 解析失败（TOML 语法错误或必填字段缺失）
+- **THEN** CLI 打印解析错误到 stderr，以退出码 1 退出，不向管理端点发送 reload 请求
+
+#### Scenario: 显式指定 --root
+- **WHEN** 用户执行 `agw reload --root /path/to/gateway`
+- **THEN** CLI 使用该路径作为网关根，而不依赖 cwd 向上探测
+
 ### Requirement: 安全基线
 网关 SHALL 默认绑定 127.0.0.1；管理端点 `/__agw/*`（metrics、reload、healthz 除外）要求 admin 令牌；日志与错误输出不出现任何 api key、令牌全量值（脱敏为前 6 位 + `***`）。
 

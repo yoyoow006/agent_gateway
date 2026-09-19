@@ -131,11 +131,12 @@ preferred = "relay"
 | `agw status [--json]` / `logs [-f]` | 供应商熔断状态与计数 / 日志 |
 | `agw provider list/add/remove/enable/disable/test` | 供应商池管理；`test` 探测 `/v1/models` 延迟 |
 | `agw switch <名>` | 粘性首选 |
+| `agw reload` | 不写盘地触发网关热重载（手动编辑 `config/local.toml` 后使用；网关未运行时退出 0） |
 | `agw install claude\|codex` | npm 安装 + 生成独立配置（零接触用户默认文件） |
 | `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile |
 | `agw project new/list` | 业务项目工作区（独立 git 仓库） |
 
-热重载：配置变更后 `agw provider add/switch` 自动通知网关；也可 `kill -HUP <pid>`。坏配置保留旧配置继续服务。
+热重载：配置变更后 `agw provider add/switch` 自动通知网关；纯手动编辑后用 `agw reload`；也可 `kill -HUP <pid>`。坏配置保留旧配置继续服务。
 
 ## 安全
 
