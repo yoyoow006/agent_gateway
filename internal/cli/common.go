@@ -67,21 +67,21 @@ func adminRequest(method, url string, cfg *config.Config) (*http.Response, error
 	return client.Do(req)
 }
 
-// reloadIfRunning 触发热重载；网关未运行时静默跳过并提示。
-func reloadIfRunning(root string, cfg *config.Config) {
+// reloadIfRunning 触发热重载；返回是否真正触发了 reload 与错误。
+// 网关未运行时返回 (false, nil) 并打印提示；请求失败返回 (false, err)。
+func reloadIfRunning(root string, cfg *config.Config) (bool, error) {
 	if !pidAlive(readPid(root)) {
 		fmt.Println("提示：网关未运行，配置将在下次启动时生效")
-		return
+		return false, nil
 	}
 	resp, err := adminRequest("POST", adminURL(cfg, "/__agw/reload"), cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "警告：热重载请求失败（%v）；网关重启后生效\n", err)
-		return
+		return false, fmt.Errorf("热重载请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 200 {
 		fmt.Println("已通知网关热重载")
-	} else {
-		fmt.Fprintf(os.Stderr, "警告：热重载返回 %d；网关重启后生效\n", resp.StatusCode)
+		return true, nil
 	}
+	return false, fmt.Errorf("热重载返回 HTTP %d", resp.StatusCode)
 }
