@@ -42,6 +42,7 @@ type Provider struct {
 	Priority          int               `toml:"priority"`
 	Enabled           bool              `toml:"enabled"`
 	Preferred         bool              `toml:"preferred,omitempty"`
+	DefaultModel      string            `toml:"default_model,omitempty"`
 	ModelMap          map[string]string `toml:"model_map,omitempty"`
 	Headers           map[string]string `toml:"headers,omitempty"`
 	ConnectTimeoutSec int               `toml:"connect_timeout_sec,omitempty"`
@@ -240,6 +241,9 @@ func applyProviderFields(p *Provider, pm map[string]any) {
 	}
 	if v, ok := pm["preferred"].(bool); ok {
 		p.Preferred = v
+	}
+	if v, ok := pm["default_model"].(string); ok && v != "" {
+		p.DefaultModel = v
 	}
 	if v, ok := pm["connect_timeout_sec"].(int64); ok {
 		p.ConnectTimeoutSec = int(v)

@@ -205,6 +205,103 @@ func TestPassthroughModelMapRewritesOnlyModel(t *testing.T) {
 	}
 }
 
+func TestPassthroughDefaultModel(t *testing.T) {
+	var captured capturedReq
+	done := make(chan struct{})
+	clientBody := `{"model":"claude-new","max_tokens":50,"messages":[{"role":"user","content":"hi"}]}`
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured = capturedReq{body: body}
+		close(done)
+		w.WriteHeader(200)
+		io.WriteString(w, `{"ok":1}`)
+	})
+	prov := anthropicProvider("a", up.server.URL, 1)
+	prov.DefaultModel = "claude-safe"
+	cfg, _ := testConfig(t, prov)
+	s := New(cfg, nil, nil)
+
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(clientBody))
+	req.Header.Set("Authorization", "Bearer agw-test-global")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("上游未被调用: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(captured.body, []byte(`"model":"claude-safe"`)) {
+		t.Errorf("未知模型未回退 default_model: %s", captured.body)
+	}
+	wantSuffix := `,"max_tokens":50,"messages":[{"role":"user","content":"hi"}]}`
+	if !bytes.HasSuffix(captured.body, []byte(wantSuffix)) {
+		t.Errorf("default_model 改写不应重排其余 JSON 字节: %s", captured.body)
+	}
+}
+
+func TestPassthroughModelMapWinsOverDefaultModel(t *testing.T) {
+	var captured capturedReq
+	done := make(chan struct{})
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured = capturedReq{body: body}
+		close(done)
+		w.WriteHeader(200)
+		io.WriteString(w, `{"ok":1}`)
+	})
+	prov := anthropicProvider("a", up.server.URL, 1)
+	prov.DefaultModel = "claude-safe"
+	prov.ModelMap = map[string]string{"claude-x": "claude-relay"}
+	cfg, _ := testConfig(t, prov)
+	s := New(cfg, nil, nil)
+
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-x","max_tokens":50}`))
+	req.Header.Set("Authorization", "Bearer agw-test-global")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("上游未被调用: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(captured.body, []byte(`"model":"claude-relay"`)) {
+		t.Errorf("精确映射应优先: %s", captured.body)
+	}
+	if bytes.Contains(captured.body, []byte("claude-safe")) {
+		t.Errorf("default_model 不应参与精确映射: %s", captured.body)
+	}
+}
+
+func TestPassthroughWithoutDefaultModelKeepsUnknown(t *testing.T) {
+	var captured capturedReq
+	done := make(chan struct{})
+	clientBody := `{"model":"claude-new","max_tokens":50}`
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured = capturedReq{body: body}
+		close(done)
+		w.WriteHeader(200)
+		io.WriteString(w, `{"ok":1}`)
+	})
+	prov := anthropicProvider("a", up.server.URL, 1)
+	prov.ModelMap = map[string]string{"claude-x": "claude-relay"}
+	cfg, _ := testConfig(t, prov)
+	s := New(cfg, nil, nil)
+
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(clientBody))
+	req.Header.Set("Authorization", "Bearer agw-test-global")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("上游未被调用: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Equal(captured.body, []byte(clientBody)) {
+		t.Errorf("未配置 default_model 应保持原模型和字节: %s", captured.body)
+	}
+}
+
 func TestPassthroughSSEStreamFlushed(t *testing.T) {
 	chunk1 := "event: content_block_delta\ndata: {\"delta\":{\"text\":\"你\"}}\n\n"
 	chunk2 := "event: content_block_delta\ndata: {\"delta\":{\"text\":\"好\"}}\n\n"

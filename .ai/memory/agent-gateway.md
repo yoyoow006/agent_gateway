@@ -23,3 +23,7 @@
 ## 2026-09-04 · 来源变更 protocol-internal-cleanup
 **坑**：chat 流式 tool_calls 键归位不能只看 index——部分中转不发送 index，且存在混合形态（首片带 index+ID、续接只带 ID）；若 Index 分支不登记 idToChat，一次调用会被拆成重复 ID + 空 name 双块（P1-1 首版回归，审查探针抓获）。
 **解**：resolveToolKey 三分支启发式（Index 用值并登记 ID→键；缺 index 时 ID 已知复用该键/新 ID 建新键/空 ID 坍缩最后活跃键），Index 分支必须登记 idToChat。教训二则：①勾选任务前要逐子项验证（errdef 漏验险些带病归档）；②错误映射下沉必须按协议分表——统一表会改 529/413 等取值。
+
+## 2026-09-20 · 来源变更 provider-default-model
+**坑**：客户端升级发出 `model_map` 未收录的新模型名时，按原模型透传会让只认旧配置的中转直接失败；同时配置覆盖层若把空 `default_model = ""` 当有效清除，会意外抹掉下层兜底。
+**解**：模型解析统一走“档案级映射 + 供应商级映射（供应商优先）→ 供应商 `default_model` → 原模型”；同协议继续用顶层 `model` 精确定位替换，除该字段外不重排 JSON 字节；覆盖层空字符串与非出现键等价，不清除下层值。CLI `provider add --default-model` 受进程级 cobra flag 单例残留影响，执行后必须重置 flag 值，避免同进程二次调用误继承旧值。

@@ -102,7 +102,9 @@ api_key_env = "RELAY_CHAT_KEY"   # 或 api_key（只应出现在 local.toml）
 priority = 1                # 数字越小越优先
 enabled = true
 
-[providers.model_map]       # 请求模型 → 实际模型
+default_model = "claude-sonnet-5-relay"  # 映射未命中时兜底（未配置则透传）
+
+[providers.model_map]       # 请求模型 → 实际模型；优先于 default_model
 "claude-sonnet-5" = "claude-sonnet-5-relay"
 
 [providers.headers]         # 中转站需要的自定义头

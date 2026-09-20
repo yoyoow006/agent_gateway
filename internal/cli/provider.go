@@ -33,6 +33,7 @@ func init() {
 	provAddCmd.Flags().String("api-key-env", "", "密钥环境变量名（推荐，优先于 --api-key）")
 	provAddCmd.Flags().String("api-key", "", "密钥明文（只写入 0600 的 local.toml）")
 	provAddCmd.Flags().Int("priority", 100, "优先级，数字越小越优先")
+	provAddCmd.Flags().String("default-model", "", "模型映射未命中时使用的默认模型（缺省透传）")
 	provAddCmd.Flags().StringArray("model", nil, "模型映射 from=to（可重复）")
 	provAddCmd.Flags().StringArray("header", nil, "附加上游请求头 K=V（可重复）")
 	_ = provAddCmd.MarkFlagRequired("protocol")
@@ -90,6 +91,10 @@ func runProviderAdd(cmd *cobra.Command, args []string) {
 	apiKeyEnv, _ := cmd.Flags().GetString("api-key-env")
 	apiKey, _ := cmd.Flags().GetString("api-key")
 	priority, _ := cmd.Flags().GetInt("priority")
+	defaultModel, _ := cmd.Flags().GetString("default-model")
+	// provider 命令是进程级单例；命令结束后重置值，避免同进程下一次调用
+	// 把本次 default-model 误当作“省略”继续写入。
+	defer func() { _ = cmd.Flags().Set("default-model", "") }()
 	models, _ := cmd.Flags().GetStringArray("model")
 	headers, _ := cmd.Flags().GetStringArray("header")
 
@@ -104,7 +109,7 @@ func runProviderAdd(cmd *cobra.Command, args []string) {
 		Name: name, Protocol: config.Protocol(protocol), BaseURL: baseURL,
 		APIKey: apiKey, APIKeyEnv: apiKeyEnv,
 		Priority: priority, Enabled: true,
-		ModelMap: parseKVs(models), Headers: parseKVs(headers),
+		DefaultModel: defaultModel, ModelMap: parseKVs(models), Headers: parseKVs(headers),
 	}
 	if existing != nil {
 		np.Preferred = existing.Preferred // 保留粘性标记
