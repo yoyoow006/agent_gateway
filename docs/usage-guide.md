@@ -166,12 +166,14 @@ cp .env.example .env && chmod 600 .env
 
 ```toml
 [project]
-providers = ["relay"]       # 只用这几家（按此顺序）；留空继承全局池
+providers = ["relay"]       # 只用这几家候选；留空继承全局池；顺序仍按 priority（同优先级按名称）
 preferred = "relay"         # 粘性首选
 
 [project.model_map]
 "claude-sonnet-5" = "gpt-5.2"
 ```
+
+说明：`providers` 只决定项目可使用哪些候选供应商；实际路由顺序仍沿用全局 `priority`（数字越小越优先，同优先级按名称稳定排序）。`preferred` 在健康时把该供应商置顶，不改变其余候选的相对顺序。
 
 供应商级兜底写在 `config/local.toml` 的对应 `[[providers]]` 条目中；精确映射优先：
 
@@ -193,6 +195,7 @@ agw serve            # 前台运行（调试用；Ctrl-C 退出）
 - 端口被占用时 `agw start` **立即报错**并给出日志尾部。
 - 配置热重载：`agw provider add/remove/enable/disable`、`agw switch` 会自动通知网关；
   也可 `kill -HUP $(cat .run/agw.pid)`。**坏配置保留旧配置继续服务**。
+  认证、协议、header 与模型映射热重载后生效；`connect_timeout_sec` / `first_byte_timeout_sec` 变更需重启网关后生效。
 - 监听地址默认 `127.0.0.1:8787`（`config/local.toml` 的 `[gateway] listen` 可改）；
   改成非回环地址启动时会显著告警。
 
@@ -249,8 +252,8 @@ agw status                               # 各供应商状态：closed/open/half
 
 **对正在运行的 agent 完全无感**，规则如下：
 
-- **首字节前失败**（连接失败、超时、408/429/5xx/529、上游 401/403）：自动换下一优先级供应商并
-  **重放原请求**——客户端收到的就是健康供应商的成功响应。
+- **首字节前失败**（连接失败、超时、上游 401、403、408、429、500、502、503、504、529）：自动换下一优先级供应商并
+  **重放原请求**——客户端收到的就是健康供应商的成功响应。501、505 等非清单 5xx 原样回传并终止本次请求链。
 - **流建立后中断**：按 SSE 语义输出协议错误帧并终止该响应，agent 自带重试会把下一个请求
   落到健康供应商——任务级不中断。
 - **被动熔断**：某家连续 3 次失败 → 打开（跳过、零连接），冷却 60s 起指数退避（上限 15 分钟），
@@ -298,7 +301,7 @@ agw status                               # 各供应商状态：closed/open/half
 | Codex 工具调用失败/丢工具 | Codex ≥0.149 跨协议工具编排已自动翻译（`additional_tools`/namespace/custom，见第 9 节）。若仍异常，检查目标供应商是否真支持对应工具；日志里若见"翻译降级 …"说明上游该字段无对应。 |
 | 日志里"翻译降级 cache_control …" | 正常：cache_control 跨协议丢弃，只影响缓存成本 |
 | 改了 .env 不生效 | `.env` 只在启动时加载：`agw stop && agw start` |
-| 改超时/协议/header 不生效 | 这些是 provider 字段，`agw provider add <同名>` 会自动通知网关热重载（无需重启）。`.env` 里的密钥例外——只在 `agw start` 时加载一次，改完需 `agw stop && agw start` |
+| 改超时/协议/header 不生效 | 协议/header 等字段经 `agw provider add <同名>` 热重载后生效；`connect_timeout_sec` / `first_byte_timeout_sec` 因 HTTP client 复用需重启网关后生效。`.env` 里的密钥也只在 `agw start` 时加载一次，改完需 `agw stop && agw start` |
 
 ## 12. 卸载与回滚
 
