@@ -1,4 +1,108 @@
 {
   "schema_version": 1,
-  "projects": []
+  "projects": [
+    {
+      "name": "agent_gateway",
+      "path": "./",
+      "build": "go",
+      "card": "kb/projects/agent_gateway.md",
+      "search_roots": [
+        "cmd",
+        "config",
+        "internal"
+      ],
+      "applications": [
+        {
+          "server": "agw",
+          "module": "cmd/agw",
+          "main_class": "main",
+          "source_path": "cmd/agw/main.go"
+        }
+      ],
+      "verification": {
+        "build_command": "go build ./...",
+        "test_command": "go vet ./... && go test -race ./...",
+        "evidence": "kb/verification-evidence.md",
+        "verified_commit": "b35d30936777e83d53290c5c93ca9fc317a04a31"
+      },
+      "business_terms": [
+        {
+          "term": "failover",
+          "synonyms": [
+            "故障切换",
+            "供应商切换"
+          ],
+          "source_paths": [
+            "internal/gateway/forward.go",
+            "internal/gateway/failover_test.go",
+            "README.md"
+          ]
+        },
+        {
+          "term": "protocol translation",
+          "synonyms": [
+            "协议转换",
+            "IR"
+          ],
+          "source_paths": [
+            "internal/protocol/codec.go",
+            "internal/protocol/ir.go",
+            "internal/gateway/forward.go",
+            "README.md"
+          ]
+        },
+        {
+          "term": "virtual token",
+          "synonyms": [
+            "虚拟令牌",
+            "project profile",
+            "项目档案"
+          ],
+          "source_paths": [
+            "internal/config/config.go",
+            "internal/gateway/server.go",
+            "internal/agent/run.go",
+            "README.md"
+          ]
+        },
+        {
+          "term": "passive breaker",
+          "synonyms": [
+            "被动熔断",
+            "half-open",
+            "半开探针"
+          ],
+          "source_paths": [
+            "internal/provider/breaker.go",
+            "internal/gateway/failover_test.go",
+            "README.md"
+          ]
+        },
+        {
+          "term": "hot reload",
+          "synonyms": [
+            "热重载"
+          ],
+          "source_paths": [
+            "internal/gateway/server.go",
+            "internal/cli/reload.go",
+            "README.md"
+          ]
+        },
+        {
+          "term": "agent launcher",
+          "synonyms": [
+            "agent 启动器",
+            "agw run"
+          ],
+          "source_paths": [
+            "internal/agent/install.go",
+            "internal/agent/run.go",
+            "internal/cli/run.go",
+            "README.md"
+          ]
+        }
+      ]
+    }
+  ]
 }

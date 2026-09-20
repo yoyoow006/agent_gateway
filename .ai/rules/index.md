@@ -9,6 +9,7 @@
 | 共享知识层 | `.ai/` | kb、memory、rules、prompts、tools | 路由、踩坑、项目卡、知识沉淀、事实查询 |
 | 项目登记 | `.ai/kb/projects/registry.json`, `.ai/kb/projects/` | registry、项目卡、项目模板、业务词、依赖、验证入口 | project-context、server-registry、workspace-search、business-terms、dependencies、verification |
 | 验证证据 | `.ai/kb/verification-evidence.md` | 证据复用、验证基线 | verified_commit、等价输入、证据失效、NOT_RUN、UNKNOWN、新鲜验证 |
+| agent_gateway | `cmd/agw/main.go`, `internal/`, `config/`, `.ai/kb/projects/agent_gateway.md` | agw、agent gateway、网关 | Go、LLM API 路由、Claude Code、Codex、供应商切换、failover、熔断、协议转换、虚拟令牌、项目档案、热重载 |
 | 安装器知识分层 | `.gitignore`, `.ai/kb/projects/README.md`, `openspec/specs/installer-knowledge-separation/` | 源仓库业务知识、目标项目登记 | 空白 registry、通用骨架、业务项目卡、防回流 |
 | 便携安装器契约 | `openspec/specs/portable-ai-workflow-installer/`, `scripts/install-ai-workflow.sh`, `scripts/lib/install_ai_workflow.py`, `.ai/installer-ledger.json`(安装目标侧运行时产物,源仓库不存在) | 安装器、跨 Python 兼容、资产契约、升级路径、台账 | 加载时类型别名、Path 包含 helper、入口契约、preview/--help、事务回滚、--upgrade、installer-ledger、SHA-256 判定 |
 | 双运行时一键安装器 | `scripts/install-workflow.sh`, `scripts/tests/test_install_workflow.py`, `openspec/specs/workflow-installer/` | bash 安装器、双运行时安装 | 资产树三树复制、单一来源、--force 逐文件备份、memory 永不覆盖、旧布局 ai-kb.bak 自愈、--fast 装后自检、sdd 星式忽略、无 profile 双侧必检 |
