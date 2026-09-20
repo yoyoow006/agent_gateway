@@ -54,6 +54,11 @@ func New(root, name string, runner Runner) (token string, err error) {
 	if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
 		return "", fmt.Errorf("项目已存在: %s", dir)
 	}
+	// 先校验网关配置：失败时不得创建项目副作用。
+	cfg, err := config.Load(root)
+	if err != nil {
+		return "", fmt.Errorf("读取配置失败: %w", err)
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -67,11 +72,6 @@ func New(root, name string, runner Runner) (token string, err error) {
 		fmt.Fprintf(os.Stderr, "警告：git init 失败（%v），项目已创建但不受版本管理\n", err)
 	}
 
-	// 令牌写入 local 配置
-	cfg, err := config.Load(root)
-	if err != nil {
-		return "", fmt.Errorf("读取配置失败: %w", err)
-	}
 	token = config.NewToken()
 	proj := cfg.Projects[name]
 	proj.Token = token

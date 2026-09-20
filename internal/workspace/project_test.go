@@ -115,3 +115,16 @@ func TestList(t *testing.T) {
 		t.Errorf("alpha 覆盖摘要错误: %+v", alpha)
 	}
 }
+
+func TestNewInvalidConfigLeavesNoProject(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "config"), 0o755)
+	os.WriteFile(filepath.Join(root, "config", "default.toml"), []byte("not [valid\n"), 0o644)
+
+	if _, err := New(root, "demo", &fakeRunner{}); err == nil {
+		t.Fatal("invalid configuration should fail")
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "demo")); !os.IsNotExist(err) {
+		t.Fatalf("project directory should not exist after failure: %v", err)
+	}
+}

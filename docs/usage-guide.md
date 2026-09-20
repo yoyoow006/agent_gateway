@@ -125,14 +125,14 @@ agw provider add official --protocol anthropic --base-url https://api.anthropic.
     --api-key-env OFFICIAL_KEY --priority 10
 
 # openai-chat 协议（绝大多数中转站）
-agw provider add relay --protocol openai-chat --base-url https://relay.example/v1 \
+agw provider add relay --protocol openai-chat --base-url https://relay.example \
     --api-key-env RELAY_CHAT_KEY --priority 1 \
     --model claude-sonnet-5=claude-sonnet-5-relay \
     --default-model claude-sonnet-5-relay \
     --header X-Title=agw
 
 # openai-responses 协议（新版 Codex 必需，见第 9 节）
-agw provider add openai --protocol openai-responses --base-url https://api.openai.com/v1 \
+agw provider add openai --protocol openai-responses --base-url https://api.openai.com \
     --api-key-env OPENAI_KEY --priority 20
 ```
 
