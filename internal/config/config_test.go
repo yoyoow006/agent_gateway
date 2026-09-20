@@ -134,6 +134,32 @@ providers = ["official"]
 	}
 }
 
+func TestProviderDefaultModelEmptyDoesNotOverride(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		"config/default.toml": `
+[[providers]]
+name = "official"
+protocol = "anthropic"
+base_url = "https://api.anthropic.com"
+default_model = "claude-default-old"
+priority = 10
+enabled = true
+`,
+		"config/local.toml": `
+[[providers]]
+name = "official"
+default_model = ""
+`,
+	})
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Provider("official").DefaultModel; got != "claude-default-old" {
+		t.Errorf("empty default_model = %q, want default-layer value retained", got)
+	}
+}
+
 func TestProjectOverrideLimitsChain(t *testing.T) {
 	root := writeRepo(t, map[string]string{
 		"config/default.toml": `

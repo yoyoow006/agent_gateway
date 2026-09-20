@@ -242,7 +242,7 @@ func applyProviderFields(p *Provider, pm map[string]any) {
 	if v, ok := pm["preferred"].(bool); ok {
 		p.Preferred = v
 	}
-	if v, ok := pm["default_model"].(string); ok {
+	if v, ok := pm["default_model"].(string); ok && v != "" {
 		p.DefaultModel = v
 	}
 	if v, ok := pm["connect_timeout_sec"].(int64); ok {
