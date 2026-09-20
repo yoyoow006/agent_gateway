@@ -19,7 +19,7 @@
 ## 4. 综合验证与收尾
 
 - [x] 4.1 运行 `go test ./...`、`go vet ./...`、`gofmt -l .`，预期分别全绿、无输出、无输出。
-- [ ] 4.2 运行 `bash scripts/validate-workflow.sh && openspec validate provider-default-model --strict --no-interactive`，预期通过。
+- [x] 4.2 运行 `bash scripts/validate-workflow.sh && openspec validate provider-default-model --strict --no-interactive`，预期通过。
 - [x] 4.3 主会话执行一次全 diff 综合审查，确认无 Critical/Important 后更新状态并请求归档确认。
 
 ## 本地整合策略
