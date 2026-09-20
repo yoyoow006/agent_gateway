@@ -461,3 +461,26 @@ default_token = "agw-t"
 		t.Fatalf("上游认证 = %v，真实环境变量应优先", gotAuth.Load())
 	}
 }
+
+func TestResolveRootERejectsExplicitInvalidRoot(t *testing.T) {
+	rootFlag = t.TempDir()
+	t.Cleanup(func() { rootFlag = "" })
+
+	if _, err := resolveRootE(); err == nil {
+		t.Fatal("explicit --root without config/ should be rejected")
+	}
+}
+
+func TestResolveRootExplicitFlagOverridesEnvironment(t *testing.T) {
+	t.Setenv("AGW_ROOT", "/tmp/agw-definitely-invalid")
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rootFlag = root
+	t.Cleanup(func() { rootFlag = "" })
+
+	if got, err := resolveRootE(); err != nil || got != root {
+		t.Fatalf("resolveRootE() = %q,%v; want explicit root %q,nil", got, err, root)
+	}
+}

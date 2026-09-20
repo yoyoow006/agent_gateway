@@ -145,3 +145,13 @@ func TestRunReloadParseError(t *testing.T) {
 		t.Errorf("解析失败不应发 HTTP，hits=%d", hits.Load())
 	}
 }
+
+func TestResolveRootERejectsInvalidAGWRoot(t *testing.T) {
+	t.Setenv("AGW_ROOT", t.TempDir())
+	rootFlag = ""
+	t.Cleanup(func() { rootFlag = "" })
+
+	if _, err := resolveRootE(); err == nil {
+		t.Fatal("AGW_ROOT without config/ should be rejected")
+	}
+}

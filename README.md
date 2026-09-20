@@ -25,7 +25,7 @@ go build -o agw ./cmd/agw
 cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / RELAY_CHAT_KEY
 ./agw provider add official --protocol anthropic --base-url https://api.anthropic.com \
     --api-key-env OFFICIAL_KEY --priority 10
-./agw provider add relay --protocol openai-chat --base-url https://relay.example/v1 \
+./agw provider add relay --protocol openai-chat --base-url https://relay.example \
     --api-key-env RELAY_CHAT_KEY --priority 1 --model claude-sonnet-5=claude-sonnet-5-relay
 
 # 3. 启动网关（首次自动生成 admin/全局令牌到 config/local.toml）
@@ -97,7 +97,7 @@ listen = "127.0.0.1:8787"   # 仅回环；改 0.0.0.0 启动时会显著告警
 [[providers]]
 name = "relay"
 protocol = "openai-chat"    # anthropic | openai-chat | openai-responses
-base_url = "https://relay.example/v1"
+base_url = "https://relay.example"
 api_key_env = "RELAY_CHAT_KEY"   # 或 api_key（只应出现在 local.toml）
 priority = 1                # 数字越小越优先
 enabled = true

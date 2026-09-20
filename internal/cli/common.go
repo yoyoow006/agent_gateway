@@ -20,19 +20,32 @@ func addRootFlag(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&rootFlag, "root", "", "网关仓库根目录（默认从 cwd 向上探测）")
 }
 
-// resolveRoot 得到网关仓库根。
-func resolveRoot() string {
-	if rootFlag != "" {
-		return rootFlag
+// resolveRootE 解析网关仓库根；显式 --root / AGW_ROOT 必须包含 config/。
+func resolveRootE() (string, error) {
+	explicit := rootFlag
+	source := "--root"
+	if explicit == "" {
+		if v := os.Getenv("AGW_ROOT"); v != "" {
+			explicit = v
+			source = "AGW_ROOT"
+		}
 	}
-	if v := os.Getenv("AGW_ROOT"); v != "" {
-		return v
+	if explicit != "" {
+		if _, err := os.Stat(filepath.Join(explicit, "config")); err != nil {
+			return "", fmt.Errorf("%s=%s 不是有效网关仓库", source, explicit)
+		}
+		return explicit, nil
 	}
 	wd, err := os.Getwd()
 	if err != nil {
-		fatalf("无法获取 cwd: %v", err)
+		return "", fmt.Errorf("无法获取 cwd: %w", err)
 	}
-	root, err := config.FindRoot(wd)
+	return config.FindRoot(wd)
+}
+
+// resolveRoot 得到网关仓库根；解析失败时直接退出。
+func resolveRoot() string {
+	root, err := resolveRootE()
 	if err != nil {
 		fatalf("%v", err)
 	}
