@@ -19,4 +19,4 @@
 - [x] 4. 综合审查与归档
   - [x] 4.1 复核 F-001/F-002/F-007 的最小修复边界，确认无行为扩大。
   - [x] 4.2 一次全 diff 综合审查，记录 findings 与未验证范围。
-  - [ ] 4.3 tasks 全绿且无 Critical/Important 未决后，合并 delta 并归档。
+  - [x] 4.3 tasks 全绿且无 Critical/Important 未决后，合并 delta 并归档。
