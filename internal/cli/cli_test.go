@@ -183,6 +183,44 @@ func TestProviderCommandsPersist(t *testing.T) {
 	}
 }
 
+func TestProviderAddDefaultModel(t *testing.T) {
+	root := writeRepo(t, map[string]string{"config/default.toml": ""})
+	cmd := NewRootCmd()
+	cmd.SetArgs([]string{
+		"provider", "add", "relay", "--root", root,
+		"--protocol", "openai-chat", "--base-url", "https://relay.example",
+		"--api-key-env", "RELAY_KEY", "--priority", "1",
+		"--default-model", "gpt-safe",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("provider add: %v", err)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Provider("relay").DefaultModel; got != "gpt-safe" {
+		t.Fatalf("default_model = %q, want gpt-safe", got)
+	}
+
+	cmd = NewRootCmd()
+	cmd.SetArgs([]string{
+		"provider", "add", "relay", "--root", root,
+		"--protocol", "openai-chat", "--base-url", "https://relay.example",
+		"--api-key-env", "RELAY_KEY",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("provider add update: %v", err)
+	}
+	cfg, err = config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Provider("relay").DefaultModel; got != "" {
+		t.Fatalf("updated default_model = %q, want replacement semantics to clear it", got)
+	}
+}
+
 // 任务 8.3：provider test 探测。
 func TestProbeProvider(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

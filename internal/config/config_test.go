@@ -79,6 +79,61 @@ priority = 5
 	}
 }
 
+func TestProviderDefaultModelMerge(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		"config/default.toml": `
+[[providers]]
+name = "official"
+protocol = "anthropic"
+base_url = "https://api.anthropic.com"
+default_model = "claude-default-old"
+priority = 10
+enabled = true
+`,
+		"config/local.toml": `
+[[providers]]
+name = "official"
+default_model = "claude-default-new"
+
+[[providers]]
+name = "relay"
+protocol = "openai-chat"
+base_url = "https://relay.example"
+priority = 1
+enabled = true
+`,
+		"projects/foo/agw.toml": `
+[project]
+providers = ["official"]
+`,
+	})
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	official := cfg.Provider("official")
+	if official == nil {
+		t.Fatal("official provider missing")
+	}
+	if official.DefaultModel != "claude-default-new" {
+		t.Errorf("default_model = %q, want local override", official.DefaultModel)
+	}
+	relay := cfg.Provider("relay")
+	if relay == nil {
+		t.Fatal("relay provider missing")
+	}
+	if relay.DefaultModel != "" {
+		t.Errorf("relay default_model = %q, want empty when absent", relay.DefaultModel)
+	}
+	prof, err := cfg.ResolveProfile("foo")
+	if err != nil {
+		t.Fatalf("ResolveProfile: %v", err)
+	}
+	if len(prof.Chain) != 1 || prof.Chain[0].Name != "official" || prof.Chain[0].DefaultModel != "claude-default-new" {
+		t.Errorf("project chain lost default_model: %+v", prof.Chain)
+	}
+}
+
 func TestProjectOverrideLimitsChain(t *testing.T) {
 	root := writeRepo(t, map[string]string{
 		"config/default.toml": `

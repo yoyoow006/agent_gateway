@@ -150,7 +150,7 @@ func (s *Server) attempt(r *http.Request, clientProto config.Protocol, profile *
 	if sameProto {
 		reqBody = body
 		if len(body) > 0 && r.Method == http.MethodPost {
-			reqBody = applyModelMap(body, effectiveModelMap(profile, p))
+			reqBody = applyModelMap(body, effectiveModelMap(profile, p), p.DefaultModel)
 		}
 	} else {
 		if len(body) == 0 {
@@ -160,9 +160,7 @@ func (s *Server) attempt(r *http.Request, clientProto config.Protocol, profile *
 		if err != nil {
 			return nil, fmt.Errorf("解析客户端请求: %w", err)
 		}
-		if mapped, ok := effectiveModelMap(profile, p)[ir.Model]; ok {
-			ir.Model = mapped
-		}
+		ir.Model = resolveModel(ir.Model, effectiveModelMap(profile, p), p.DefaultModel)
 		buildPath, hdr, built, err := codecFor(p.Protocol).BuildRequest(ir)
 		if err != nil {
 			return nil, fmt.Errorf("构建 %s 请求: %w", p.Protocol, err)
@@ -343,6 +341,17 @@ func (s *Server) handleCountTokens(w http.ResponseWriter, r *http.Request, profi
 
 // ---- 工具 ----
 
+// resolveModel 先精确映射；未命中时回退供应商默认模型，最后保持原模型。
+func resolveModel(model string, m map[string]string, defaultModel string) string {
+	if mapped, ok := m[model]; ok {
+		return mapped
+	}
+	if defaultModel != "" {
+		return defaultModel
+	}
+	return model
+}
+
 // effectiveModelMap 合并档案级与供应商级模型映射（供应商优先）。
 func effectiveModelMap(profile *config.Profile, p *config.Provider) map[string]string {
 	if len(profile.ModelMap) == 0 && len(p.ModelMap) == 0 {
@@ -359,8 +368,8 @@ func effectiveModelMap(profile *config.Profile, p *config.Provider) map[string]s
 }
 
 // applyModelMap 在不重排其余字节的前提下重写顶层 model 字段。
-func applyModelMap(body []byte, m map[string]string) []byte {
-	if len(m) == 0 {
+func applyModelMap(body []byte, m map[string]string, defaultModel string) []byte {
+	if len(m) == 0 && defaultModel == "" {
 		return body
 	}
 	var top struct {
@@ -369,8 +378,8 @@ func applyModelMap(body []byte, m map[string]string) []byte {
 	if err := json.Unmarshal(body, &top); err != nil || top.Model == "" {
 		return body
 	}
-	mapped, ok := m[top.Model]
-	if !ok {
+	mapped := resolveModel(top.Model, m, defaultModel)
+	if mapped == top.Model {
 		return body
 	}
 	// 定位顶层 "model" 值的精确字节区间并拼接替换

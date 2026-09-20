@@ -1,11 +1,13 @@
 package gateway
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"agent_gateway/internal/config"
 )
@@ -185,6 +187,40 @@ func TestTranslateResponsesClientToAnthropicUpstream(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("客户端 SSE 缺少 %q\n%s", want, out)
 		}
+	}
+}
+
+func TestTranslatedDefaultModel(t *testing.T) {
+	var captured []byte
+	done := make(chan struct{})
+	up := newUpstream(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured = body
+		close(done)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		io.WriteString(w, `{"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"claude-safe","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
+	})
+	prov := config.Provider{Name: "c", Protocol: config.ProtocolOpenAIChat, BaseURL: up.server.URL, APIKey: "sk-upstream", Priority: 1, Enabled: true, DefaultModel: "claude-safe"}
+	cfg, token := testConfig(t, prov)
+	cfg.Projects[""] = config.ProjectProfile{ModelMap: map[string]string{"claude-known": "claude-profile"}}
+	cfg.RebuildTokenIndex()
+	s := New(cfg, nil, nil)
+
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-new","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("上游未被调用: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(captured, []byte(`"model":"claude-safe"`)) {
+		t.Errorf("跨协议未知模型未应用 default_model: %s", captured)
+	}
+	if rec.Code != 200 {
+		t.Fatalf("响应 = %d %s", rec.Code, rec.Body.String())
 	}
 }
 
