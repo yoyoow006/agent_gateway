@@ -1,0 +1,22 @@
+# Tasks
+
+- [ ] 1. 文档契约测试
+  - [x] 1.1 在 Go 测试中增加文档语义断言：禁止项目 `providers` 注释写“按此顺序”；要求说明 `priority` 排序与 `preferred` 置顶语义。
+  - [x] 1.2 增加热重载文档断言：timeout 相关说明必须要求重启网关。
+  - [x] 1.3 增加 failover 文档断言：README / usage guide 禁止用泛化 `5xx` 表述替代精确状态码清单。
+  - [x] 1.4 运行目标测试，确认新增契约测试按预期失败。
+- [ ] 2. 文档更新
+  - [x] 2.1 更新 README 项目覆盖与 failover 语义。
+  - [x] 2.2 更新 usage-guide 项目覆盖、热重载、FAQ 与 failover 语义。
+  - [x] 2.3 更新项目模板注释，保持“候选子集 + priority 排序”的准确描述。
+  - [x] 2.4 检查完整 diff，确认没有修改运行时代码。
+- [ ] 3. 验证
+  - [x] 3.1 运行文档契约目标测试。
+  - [x] 3.2 运行 `go test ./internal/workspace ./internal/config -count=1`。
+  - [x] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [x] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [x] 3.5 运行 `openspec validate document-runtime-routing-semantics --strict --no-interactive`。
+- [ ] 4. 审查与归档
+  - [x] 4.1 一次全 diff 综合审查，确认文档与代码语义一致且无运行时行为变更。
+  - [x] 4.2 记录 findings、未验证范围和残余风险。
+  - [x] 4.3 全部任务通过后合并 delta、更新知识沉淀并归档。

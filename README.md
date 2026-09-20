@@ -58,7 +58,7 @@ agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）�
 
 ### 不中断切换（请求边界 failover）
 
-- **首字节前**（连接失败 / 超时 / 408 / 429 / 5xx / 529 / 上游 401/403）：自动换下一优先级供应商并**重放原请求**，客户端无感知。
+- **首字节前**（连接失败 / 超时 / 上游 401、403、408、429、500、502、503、504、529）：自动换下一优先级供应商并**重放原请求**，客户端无感知；501、505 等非清单 5xx 原样回传并终止本次请求链。
 - **流建立后**中断：按 SSE 语义终止该响应，由 agent 自带重试落到健康供应商——任务级不中断。
 - **被动熔断**：供应商连续 3 次失败进入打开（跳过、零连接），冷却 60s 起指数退避（上限 15 分钟），半开放行单探针恢复。
 - **粘性首选**：`agw switch <名>` 后健康时优先路由，减少 prompt cache 失效。
@@ -118,12 +118,14 @@ default_model = "claude-sonnet-5-relay"  # 映射未命中时兜底（未配置�
 
 ```toml
 [project]
-providers = ["relay"]       # 只用这几家（按此顺序）；留空继承全局池
+providers = ["relay"]       # 只用这几家候选；留空继承全局池；顺序仍按 priority（同优先级按名称）
 preferred = "relay"
 
 [project.model_map]
 "claude-sonnet-5" = "gpt-5.2"
 ```
+
+`providers` 只筛选候选；实际顺序仍按全局 `priority`（同优先级按名称排序），`preferred` 健康时置顶。
 
 ## 命令一览
 
@@ -138,7 +140,7 @@ preferred = "relay"
 | `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile |
 | `agw project new/list` | 业务项目工作区（独立 git 仓库） |
 
-热重载：配置变更后 `agw provider add/switch` 自动通知网关；纯手动编辑后用 `agw reload`；也可 `kill -HUP <pid>`。坏配置保留旧配置继续服务。
+热重载：配置变更后 `agw provider add/switch` 自动通知网关；纯手动编辑后用 `agw reload`；也可 `kill -HUP <pid>`。坏配置保留旧配置继续服务。认证、协议、header 与模型映射热重载后生效；`connect_timeout_sec` / `first_byte_timeout_sec` 变更需重启网关后生效。
 
 ## 安全
 

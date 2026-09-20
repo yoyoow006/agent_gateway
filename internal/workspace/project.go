@@ -32,8 +32,8 @@ func (execRunner) Run(name string, args ...string) error {
 
 // agwTomlTemplate 是项目覆盖配置模板。
 const agwTomlTemplate = `# 项目路由覆盖（提交到业务仓库；令牌等密钥只存网关 config/local.toml）
-# providers：按序启用的供应商子集（留空 = 继承全局池按优先级）
-# preferred：粘性首选（健康时优先，减少 prompt cache 失效）
+# providers：启用哪些供应商候选子集（留空 = 继承全局池）；实际顺序仍按 provider priority（同优先级按名称）
+# preferred：粘性首选（健康时置顶，减少 prompt cache 失效）
 # model_map：请求模型 → 实际模型（叠加在供应商映射之上）
 
 [project]
