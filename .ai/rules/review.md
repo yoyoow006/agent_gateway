@@ -6,6 +6,8 @@
 
 完整审查由主会话或协调者先用 `.ai/tools/review_manifest.py freeze` 冻结所有受影响 Git 仓；manifest 位于 `.ai-local/reviews/<change>/`，不是 OpenSpec 状态真源。reviewer 只读，不得创建、补写、刷新或替换 manifest。
 
+任务级审查对象为高风险不变量（并发不变量、权限边界、跨服务契约、资金/账务不可逆性、Schema/迁移/数据删除边界等）；多个 checklist 共享同一不变量时合并为一次审查，冻结范围时按不变量名聚合。
+
 reviewer 必须在读取审查范围前和形成结论前分别执行：
 
 ```bash
@@ -45,3 +47,9 @@ Critical/Important 只有进入 `resolved`、`not-an-issue` 或用户明确决�
 已确认范围内的最小修复沿用当前模式已有授权。修复后由主会话生成新 manifest，并用 `review_manifest.py delta` 形成从上一有效 manifest 到新 manifest 的差异；复审只覆盖该差异、直接消费者和继承的开放 finding，不无证据重读未变化范围或追加原完整审查本可发现的建议。
 
 若修复需要新增未确认行为、依赖、迁移或外部副作用，立即停止，更新 OpenSpec 事实源并请求用户重新确认。
+
+## Manifest 缓存清理约束
+
+OpenSpec 归档文件持久化最终 manifest ID、comparison base、finding 状态、未验证范围、残余风险后，对应 `.ai-local/reviews/<change>/` 可作缓存清理（仅该子路径）；活跃变更、STALE manifest、未持久化最终证据的目录不得自动清理；不得递归删除整个 `.ai-local`；不得把缓存清理当作关闭 finding 的手段。
+
+标准模式仍至多一次全 diff 综合审查；严格模式仍是 Build 的任务级审查，加 Verify 的规格符合性与代码质量两个独立关注面。

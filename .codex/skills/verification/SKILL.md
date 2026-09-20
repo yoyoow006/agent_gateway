@@ -19,6 +19,10 @@ description: 用于即将声称工作完成、已修复或测试通过时——�
 
 本条消息里没有运行过验证命令，就不能声称它通过。
 
+## 证据复用
+
+调查同一事实时可按 `.ai/kb/verification-evidence.md` 复用等价 PASS 证据，但必须核对代码基线、相关输入、命令语义、环境类别、覆盖范围和证据位置。证据缺失任一身份字段、结果为 FAIL/NOT_RUN/UNKNOWN，或当前请求是新的变更完成声明时，一律重新执行与风险相称的验证。`project-context` 的 `verified_commit=current` 只表示证据基线与当前 HEAD 相同，不表示当前任务通过。
+
 ## 门禁函数
 
 ```

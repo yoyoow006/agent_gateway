@@ -50,6 +50,7 @@ print_external_commands() {
     git \
     grep \
     head \
+    mkdir \
     mktemp \
     rm \
     rmdir \
@@ -230,12 +231,125 @@ check_required_test() {
   output="$(mktemp)"
   if "$@" >"$output" 2>&1; then
     report_pass "$label"
+    rm -f "$output"
+    return 0
   else
     report_fail "$label"
     # 必需测试失败时保留具体用例/回溯，避免只有聚合标签的假诊断。
     sed 's/^/  /' "$output"
+    rm -f "$output"
+    return 1
   fi
-  rm -f "$output"
+}
+
+# --fast 输入指纹缓存：仅当 wrapper 显式注入 WORKFLOW_FAST_CACHE=1 时启用。
+# 任何缺失、格式异常、指纹漂移或历史非 PASS 都按未命中处理并实际执行。
+validation_cache_dir=".ai-local/validation-cache"
+cached_timestamp=""
+
+fast_cache_enabled() {
+  test "${WORKFLOW_FAST_CACHE:-0}" = "1"
+}
+
+compute_validation_fingerprint() {
+  # 用法: compute_validation_fingerprint <命令字符串> <输入文件>...
+  local command_text="$1"
+  shift
+  python3 -B -c '
+import hashlib
+import sys
+
+digest = hashlib.sha256()
+digest.update(sys.argv[1].encode("utf-8"))
+missing = False
+for path in sys.argv[2:]:
+    digest.update(bytes([0]))
+    digest.update(path.encode("utf-8"))
+    try:
+        with open(path, "rb") as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+    except OSError:
+        missing = True
+if missing:
+    sys.exit(3)
+print(digest.hexdigest())
+' "$command_text" "$@"
+}
+
+validation_cache_timestamp() {
+  python3 -B -c 'import datetime; print(datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))'
+}
+
+validation_cache_hit() {
+  # 用法: validation_cache_hit <缓存文件> <指纹>；命中时设置 cached_timestamp。
+  local cache_file="$1" fingerprint="$2" stored timestamp extra
+  cached_timestamp=""
+  test -r "$cache_file" || return 1
+  {
+    IFS= read -r stored &&
+      IFS= read -r timestamp &&
+      ! IFS= read -r extra
+  } < "$cache_file" || return 1
+  test "$stored" = "$fingerprint" || return 1
+  case "$timestamp" in
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;;
+    *) return 1 ;;
+  esac
+  cached_timestamp="$timestamp"
+  return 0
+}
+
+write_validation_cache() {
+  # 用法: write_validation_cache <检查ID> <指纹>；写入失败按未命中处理（下次重新执行）。
+  local cache_file timestamp
+  mkdir -p "$validation_cache_dir" 2>/dev/null || return 0
+  timestamp="$(validation_cache_timestamp)" || return 0
+  cache_file="$validation_cache_dir/$1.cache"
+  printf '%s\n%s\n' "$2" "$timestamp" > "$cache_file" 2>/dev/null || return 0
+}
+
+fingerprint_prefix() {
+  local fingerprint="$1"
+  printf '%s' "${fingerprint%"${fingerprint#????????????}"}"
+}
+
+check_cached_required_test() {
+  # 用法: check_cached_required_test <检查ID> <标签> <输入文件>... -- <命令>...
+  local id="$1" label="$2" fingerprint inputs
+  shift 2
+  inputs=()
+  while test "$#" -gt 0 && test "$1" != "--"; do
+    inputs+=("$1")
+    shift
+  done
+  if test "$#" -eq 0; then
+    report_fail "$label（内部错误：缺少命令分隔符）"
+    return 1
+  fi
+  shift
+  if fast_cache_enabled; then
+    fingerprint="$(compute_validation_fingerprint "$*" ${inputs[@]+"${inputs[@]}"})" || fingerprint=""
+    if test -n "$fingerprint" &&
+      validation_cache_hit "$validation_cache_dir/$id.cache" "$fingerprint"; then
+      report_pass "$label（指纹 $(fingerprint_prefix "$fingerprint") 未变，沿用 $cached_timestamp 实际执行结果）"
+      return 0
+    fi
+  fi
+  if check_required_test "$label" "$@"; then
+    if fast_cache_enabled && test -n "$fingerprint"; then
+      write_validation_cache "$id" "$fingerprint"
+    fi
+    return 0
+  fi
+  # 最近一次实际执行为 FAIL：删除旧指纹缓存，避免输入回退后掩盖失败。
+  if fast_cache_enabled; then
+    rm -f "$validation_cache_dir/$id.cache"
+  fi
+  return 1
 }
 
 python_cache_paths_ignored() {
@@ -440,14 +554,20 @@ mirror_equal() {
 # 限定文档后缀同时避免命中校验器自身副本里的 token 清单字面量（自引用）。
 retired_tool_names_absent() {
   local candidates=(.codex/skills .claude/skills .codex/README.md scripts/ai-workflow-assets)
-  local targets=() path token
+  local targets=() path token grep_status
   for path in "${candidates[@]}"; do
     test -e "$path" && targets+=("$path")
   done
   test "${#targets[@]}" -gt 0 || return 0
   for token in 'multi_agent_v1__spawn_agent' 'send_input' 'close_agent' 'fork_context'; do
     grep -R -F -q --include='*.md' --include='*.toml' \
-      -e "$token" -- "${targets[@]}" && return 1
+      -e "$token" -- "${targets[@]}"
+    grep_status=$?
+    case "$grep_status" in
+      0) return 1 ;;
+      1) ;;
+      *) return 1 ;;
+    esac
   done
   return 0
 }
@@ -477,23 +597,81 @@ skill_migration_notes_absent() {
 # 空归档且无 README（安装目标空白基线）为 vacuous 通过。
 archive_index_ok() {
   local readme=openspec/archive/README.md
-  local dirs entries
-  dirs="$(mktemp)" || return 1
-  entries="$(mktemp)" || { rm -f "$dirs"; return 1; }
-  find openspec/archive -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort >"$dirs"
+  local dirs_unsorted dirs entries_unsorted entries path
+  local archive_paths=() archive_names=()
+  local dotglob_was_set=0 nullglob_was_set=0
+  local enumeration_status=0 restore_status=0 awk_status
+  dirs_unsorted="$(mktemp)" || return 1
+  dirs="$(mktemp)" || { rm -f "$dirs_unsorted"; return 1; }
+  entries_unsorted="$(mktemp)" || { rm -f "$dirs_unsorted" "$dirs"; return 1; }
+  entries="$(mktemp)" || { rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted"; return 1; }
+  shopt -q dotglob && dotglob_was_set=1
+  shopt -q nullglob && nullglob_was_set=1
+  if ! shopt -s dotglob nullglob; then
+    rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+    return 1
+  fi
+  archive_paths=(openspec/archive/*) || enumeration_status=$?
+  if test "$dotglob_was_set" -eq 0; then
+    shopt -u dotglob || restore_status=1
+  fi
+  if test "$nullglob_was_set" -eq 0; then
+    shopt -u nullglob || restore_status=1
+  fi
+  if test "$enumeration_status" -ne 0 || test "$restore_status" -ne 0; then
+    rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+    return 1
+  fi
+  # bash ≤4.3 在 set -u 下展开空数组视为未绑定变量；用条件展开守卫（与 wrapper 同款习语）。
+  for path in ${archive_paths[@]+"${archive_paths[@]}"}; do
+    if test -L "$path"; then
+      rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+      return 1
+    fi
+    test -d "$path" && archive_names+=("${path##*/}")
+  done
+  for path in ${archive_names[@]+"${archive_names[@]}"}; do
+    if ! printf '%s\n' "$path" >>"$dirs_unsorted"; then
+      rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+      return 1
+    fi
+  done
+  if ! sort "$dirs_unsorted" >"$dirs"; then
+    rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+    return 1
+  fi
   if test -s "$dirs" && ! test -f "$readme"; then
-    rm -f "$dirs" "$entries"
+    rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
     return 1
   fi
   if test -f "$readme"; then
-    sed -n 's/^- `\([^`]*\)`.*/\1/p' "$readme" | sort >"$entries"
-    if awk 'seen[$0]++ { found = 1 } END { exit !found }' "$entries"; then
-      rm -f "$dirs" "$entries"
+    if ! sed -n 's/^- `\([^`]*\)`.*/\1/p' "$readme" >"$entries_unsorted"; then
+      rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
       return 1
     fi
-    cmp -s "$dirs" "$entries" || { rm -f "$dirs" "$entries"; return 1; }
+    if ! sort "$entries_unsorted" >"$entries"; then
+      rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+      return 1
+    fi
+    awk 'seen[$0]++ { found = 1 } END { exit !found }' "$entries"
+    awk_status=$?
+    case "$awk_status" in
+      0)
+        rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+        return 1
+        ;;
+      1) ;;
+      *)
+        rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+        return 1
+        ;;
+    esac
+    if ! cmp -s "$dirs" "$entries"; then
+      rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
+      return 1
+    fi
   fi
-  rm -f "$dirs" "$entries"
+  rm -f "$dirs_unsorted" "$dirs" "$entries_unsorted" "$entries"
 }
 
 required_agents=()
@@ -693,14 +871,60 @@ if assistant_required codex; then
 fi
 
 # 内部 core 不运行顶层 contract；公共 wrapper 必须无条件执行该套件。
-check_required_test "事实工具必需测试（registry/边界/分页/ignore）" python3 -B -m unittest discover -v -s .ai/tools/tests -p test_project_facts.py
-check_required_test "Review manifest 必需测试（freeze/STALE/delta）" python3 -B -m unittest discover -v -s .ai/tools/tests -p test_review_manifest.py
+check_cached_required_test "project-facts-required-tests" \
+  "事实工具必需测试（registry/边界/分页/ignore）" \
+  scripts/lib/validate-workflow-core.sh \
+  .ai/tools/project_facts.py \
+  .ai/tools/tests/test_project_facts.py \
+  .ai/tools/README.md \
+  .ai/kb/projects/registry.json \
+  .ai/kb/projects/README.md \
+  -- python3 -B -m unittest discover -v -s .ai/tools/tests -p test_project_facts.py
+
+check_cached_required_test "review-manifest-required-tests" \
+  "Review manifest 必需测试（freeze/STALE/delta）" \
+  scripts/lib/validate-workflow-core.sh \
+  .ai/tools/review_manifest.py \
+  .ai/tools/tests/test_review_manifest.py \
+  -- python3 -B -m unittest discover -v -s .ai/tools/tests -p test_review_manifest.py
 
 if command -v openspec >/dev/null 2>&1; then
-  check "OpenSpec validate --all --no-interactive" openspec validate --all --no-interactive
+  # openspec validate --all 同时校验活跃 changes 与主 specs，两者都必须进入指纹。
+  openspec_inputs=(scripts/lib/validate-workflow-core.sh openspec/AGENTS.md openspec/project.md)
+  while IFS= read -r openspec_spec_file; do
+    openspec_inputs+=("$openspec_spec_file")
+  done < <((find openspec/specs -type f; find openspec/changes -type f) | sort)
+  openspec_fingerprint=""
+  openspec_cache_used=0
+  if fast_cache_enabled; then
+    openspec_fingerprint="$(compute_validation_fingerprint "openspec validate --all --no-interactive" ${openspec_inputs[@]+"${openspec_inputs[@]}"})" || openspec_fingerprint=""
+    if test -n "$openspec_fingerprint" &&
+      validation_cache_hit "$validation_cache_dir/openspec-validate.cache" "$openspec_fingerprint"; then
+      report_pass "OpenSpec validate --all --no-interactive（指纹 $(fingerprint_prefix "$openspec_fingerprint") 未变，沿用 $cached_timestamp 实际执行结果）"
+      openspec_cache_used=1
+    fi
+  fi
+  if test "$openspec_cache_used" -eq 0; then
+    if openspec validate --all --no-interactive >/dev/null 2>&1; then
+      report_pass "OpenSpec validate --all --no-interactive"
+      if fast_cache_enabled && test -n "$openspec_fingerprint"; then
+        write_validation_cache "openspec-validate" "$openspec_fingerprint"
+      fi
+    else
+      # 最近一次结果为 FAIL：清除旧缓存，避免输入回退后掩盖失败。
+      if fast_cache_enabled; then
+        rm -f "$validation_cache_dir/openspec-validate.cache"
+      fi
+      report_fail "OpenSpec validate --all --no-interactive"
+    fi
+  fi
 elif test "$require_openspec" -eq 1; then
   report_fail "OpenSpec CLI 缺失；required 模式不得跳过严格校验"
 else
+  # CLI 可用性变化也是检查语义变化；fast 模式下清除可能存在的旧缓存。
+  if fast_cache_enabled; then
+    rm -f "$validation_cache_dir/openspec-validate.cache"
+  fi
   report_skip "OpenSpec CLI 缺失；未运行 openspec validate --all --no-interactive"
 fi
 

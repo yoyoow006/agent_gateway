@@ -44,25 +44,28 @@ Claude 与 Codex 共享 `.ai/`。知识沉淀写可复用事实，不复制变�
 3. 严格模式把 `openspec/plan/<变更名>.md` 移为归档目录的 `plan.md`；标准模式没有独立 plan，不制造空文件。
 4. 追加 `openspec/archive/README.md` 索引行（变更名—主旨—模式）。
 5. 检查主规格、归档目录、共享 `.ai`、finding 的未验证范围/残余风险和 Git 状态；`accepted-risk` 必须引用用户明确决定。
+6. **持久最终证据**：在移动目录前确认 `tasks.md` 或 `review` 记录已写入 `最终 manifest ID`（链接到最近一次 VALID manifest）、`comparison base`（commit SHA）、`finding 状态`（open/resolved/not-an-issue/accepted-risk 计数）、`未验证范围`、`残余风险` 五段；缺一项停止归档。
 
 ## 4. 归档后强制验证
 
 主规格合并和目录移动会产生 Verify 阶段尚未审过的新状态，提交/整合前必须现跑：
 
-按 proposal 模式选择校验入口：标准模式运行默认诊断；严格模式运行 required 门禁。
+按 proposal 模式选择校验入口：
 
 ```bash
-# 标准模式
-bash scripts/validate-workflow.sh
+# 默认（严格模式 Archive）：--archive-light
+bash scripts/validate-workflow.sh --archive-light
 
-# 严格模式
+# 升级：当 Verify 完整门禁通过后工作流可执行文件、助手入口、技能语义、
+# 契约测试或治理规格发生变化（由 WORKFLOW_ARCHIVE_GATE=1 + --archive-files
+# 的 diff 分类自动判定），改跑：
 bash scripts/validate-workflow.sh --require-openspec
 
 git diff --check
 git status --short
 ```
 
-校验失败立即停止归档并修复。严格模式的 OpenSpec 和仓库自带必需测试不得 SKIP；CLI 不可用时 required 门禁必须非零，不得声称已经归档或完成 OpenSpec 严格校验。
+校验失败立即停止归档并修复。严格模式的 OpenSpec 和仓库自带必需测试不得 SKIP；CLI 不可用时 required 门禁必须非零，不得声称已经归档或完成 OpenSpec 严格校验。`--archive-light` 与 `--require-openspec` 互斥（语义冲突），禁止人工口头跳过完整门禁。
 
 归档变更以一个职责单元提交：
 
@@ -71,6 +74,17 @@ git add openspec/ .ai/ && git commit -m "chore(archive): <变更名>"
 ```
 
 提交前核对暂存清单，避免带入用户或本地草稿文件。
+
+## 4.1 `.ai-local` 缓存精确清理
+
+在归档任务持久最终证据后，删除该变更对应的 `.ai-local/reviews/<change>/`：
+
+```bash
+change=<变更名>
+[ -d .ai-local/reviews/$change ] && rm -rf .ai-local/reviews/$change
+```
+
+活跃 review、STALE manifest、未持久化最终证据的目录不得清理；不得 `rm -rf .ai-local`（无子路径会清掉活跃锁）；不得把缓存清理当作关闭 finding 的手段。
 
 ## 5. 分支整合
 

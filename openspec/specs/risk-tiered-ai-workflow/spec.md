@@ -106,31 +106,46 @@ Open SHALL 先从代码、OpenSpec、共享知识层和用户输入核对权威�
 
 ### Requirement: 标准模式只保留一个实施前确认点
 
-标准模式 SHALL 由 Open 一次性产出 `proposal.md`、`specs/<能力>/spec.md`、`design.md` 和包含可执行步骤的 `tasks.md`；不得再生成独立 `openspec/plan/<变更名>.md`。用户确认四件套时 SHALL 同时确认范围、设计、任务与建议的本地分支整合策略，确认后系统可连续执行 Build、综合 Verify 和 Archive，除非范围变化、验证失败、出现争议或需要外部副作用授权。
+标准模式 SHALL 由 Open 一次性产出 `proposal.md`、delta `spec.md` 和包含可执行步骤的 `tasks.md`。仅当变更存在跨模块取舍、新依赖、状态模型、重要替代方案或无法在 proposal/tasks 中清晰表达的架构决策时，才 SHALL 增加 `design.md`；不得为无独立设计决策的变更制造空壳 design。标准模式不得生成独立 `openspec/plan/<变更名>.md`。用户确认这些产物时 SHALL 同时确认范围、设计（如有）、任务与建议的本地分支整合策略，确认后系统可连续执行 Build、综合 Verify 和 Archive，除非范围变化、验证失败、出现争议或需要外部副作用授权。
+
+#### Scenario: 标准任务没有独立架构决策
+
+- **WHEN** 低到中风险变更只需在既有结构内修改一个职责边界
+- **AND** 不引入新依赖、状态模型或跨模块取舍
+- **THEN** Open 创建 proposal、delta spec 和可执行 tasks
+- **AND** 不创建 design.md 或独立 plan
+- **AND** 用户只进行一次实施前确认
+
+#### Scenario: 标准任务存在重要设计取舍
+
+- **WHEN** 标准变更存在两个以上有实质影响的实现方案或跨模块边界调整
+- **THEN** Open 增加 design.md 记录决策、替代方案和风险
+- **AND** 唯一一次实施前确认覆盖全部实际产物
+
+#### Scenario: 标准模式确认后连续执行
+
+- **WHEN** 用户确认标准模式产物及建议的本地整合策略
+- **THEN** 系统无需在 Build 完成和本地 Archive 合并前重复请求确认
+- **AND** 推送、创建 PR、强推、删除未合并工作或其他外部/破坏性动作仍须遵守独立授权规则
 
 #### Scenario: 标准模式状态推进
 
-- **WHEN** Open 已完成标准模式四件套并准备请求唯一一次实施前确认
+- **WHEN** Open 已完成标准模式实际需要的产物并准备请求唯一一次实施前确认
 - **THEN** 状态直接置为 `待确认计划`
 - **AND** 确认后依次推进 `构建中 → 待验证 → 待归档 → 已归档`
 - **AND** 不经过严格模式专用的 `待确认规范` 与 `设计中`
 
 #### Scenario: 普通低到中风险代码变更
 
-- **WHEN** 变更影响运行时代码但不满足严格模式条件，且范围可由一份四件套清晰描述
-- **THEN** Open 将设计决策和逐步实施/验证命令写入四件套
+- **WHEN** 变更影响运行时代码但不满足严格模式条件
+- **THEN** Open 将范围、行为契约和逐步实施/验证命令写入必要产物
+- **AND** 只有存在独立架构决策时才增加 design.md
 - **AND** 用户只需进行一次实施前确认
-
-#### Scenario: 标准模式确认后连续执行
-
-- **WHEN** 用户确认标准模式四件套及建议的本地整合策略
-- **THEN** 系统无需在 Design、Build 完成和本地 Archive 合并前重复请求确认
-- **AND** 推送、创建 PR、强推、删除未合并工作或其他外部/破坏性动作仍须遵守独立授权规则
 
 #### Scenario: 标准模式范围发生变化
 
 - **WHEN** 构建或审查发现必须新增已确认范围之外的行为、依赖或数据变更
-- **THEN** 系统暂停实施、更新四件套并请求用户重新确认
+- **THEN** 系统暂停实施、更新当前变更产物并请求用户重新确认
 
 ### Requirement: 标准模式必须消除重复审查
 
@@ -223,7 +238,7 @@ Open SHALL 先从代码、OpenSpec、共享知识层和用户输入核对权威�
 
 ### Requirement: 高风险流程路径必须有施压场景
 
-工作流行为契约 SHALL 以施压场景覆盖以下高风险路径，场景使用与其他场景相同的结构（共同要求＋逐字场景文本＋可判通过条件）：严格实现前的分支与 worktree 原子顺序、归档的 delta 合并与用户取消处置、审查中途 manifest 陈旧的处理。场景文件 SHALL 与镜像资产副本保持一致，结构校验 SHALL 守护这些场景的存在与关键通过条件。
+工作流行为契约 SHALL 以施压场景覆盖以下高风险路径，场景使用与其他场景相同的结构（共同要求＋逐字场景文本＋可判通过条件）：严格实现前的分支与 worktree 原子顺序、归档的 delta 合并与用户取消处置、审查中途 manifest 陈旧的处理。场景文件 SHALL 与镜像资产副本保持一致，结构校验 SHALL 守护这些场景的存在与关键通过条件。安装目标已有助手入口的冲突处置场景（场景 I）SHALL 与 `codex-workflow-target-installation` 规格的冲突入口条款语义一致：通过条件要求先 dry-run 或等价完整预检，差异入口按保留再替换处置（重命名 `AGENTS.pre-codex-workflow.md`＋SHA-256 校验一致＋安装器显式清单创建新入口），不得要求盲覆盖、输出既有正文或建议 `--force`；通过条件 SHALL 要求说明可由维护者选择在临时空目录生成模板人工整合（替代方案），其措辞 SHALL 为行为性（可按是否主动说明判定）。场景契约与安装规格任一侧修改冲突处置语义时，SHALL 以独立变更同步另一侧，不得单方面漂移。工作流技能正文变更的 Verify 终验 SHALL 重跑 `scripts/workflow-pressure-scenarios.md` 中与该技能行为契约相关的场景，相关性无法判定时重跑全部场景；重跑结果 SHALL 记录于该变更的 OpenSpec 目录。
 
 #### Scenario: 新增高风险场景
 
@@ -232,10 +247,33 @@ Open SHALL 先从代码、OpenSpec、共享知识层和用户输入核对权威�
 - **AND** 每个场景的通过条件可判（引用明确的禁止动作与正确动作）
 - **AND** 结构校验的 压力契约 检查包含这三个场景的标识与关键条件词
 
+#### Scenario: 场景 I 与安装规格语义一致
+
+- **WHEN** 维护者对照场景 I 通过条件与 `codex-workflow-target-installation` 规格的冲突入口条款
+- **THEN** 两者对差异入口的处置同为保留再替换（备份＋SHA-256 校验＋安装器显式清单）
+- **AND** 场景 I 不含冲突关闭零写入要求，且保留预检、不输出既有正文、不建议 `--force` 的条件
+- **AND** 场景 I 的替代方案条款为行为性措辞，与安装规格的上报极简性条款同向
+
+#### Scenario: 场景 I 关键条件被守护
+
+- **WHEN** 向场景 I 注入移除保留再替换关键条件（备份路径、SHA-256 校验或不输出既有正文）的修改
+- **THEN** 结构校验返回非零并指出该场景
+
+#### Scenario: 单侧漂移被阻止
+
+- **WHEN** 一个变更只修改场景 I 或 `codex-workflow-target-installation` 规格其中一侧的冲突处置语义
+- **THEN** 其 Verify 对照本条款发现另一侧未同步，变更不得进入待归档
+
 #### Scenario: 场景与资产副本漂移
 
 - **WHEN** 实体场景文件与 `scripts/ai-workflow-assets/shared/scripts/` 下副本内容不一致
 - **THEN** 字节一致性核对失败并要求同步
+
+#### Scenario: 技能正文变更重跑场景
+
+- **WHEN** 一个变更修改了任一工作流技能的正文
+- **THEN** 其 Verify 终验现跑相关施压场景并逐场景记录 PASS/FAIL
+- **AND** 任一场景 FAIL 时不得进入待归档，须回退该处措辞或按新事实重新确认范围
 
 ### Requirement: Codex 与 Claude 工作流必须保持一致
 
@@ -255,3 +293,164 @@ Open SHALL 先从代码、OpenSpec、共享知识层和用户输入核对权威�
 
 - **WHEN** 总纲或阶段技能再次声明所有文档变更必须创建四件套、所有标准任务必须独立 Design 确认、或所有任务必须双阶段审查
 - **THEN** 结构校验返回非零，阻止流程简化被后续修改悄悄回退
+
+### Requirement: 验证门禁按阶段分层
+
+公共校验入口 SHALL 提供 `--fast` 模式，仅运行内部 core 结构校验并跳过顶层契约套件，退出码与汇总口径与全量模式一致；未传参默认 SHALL 保持全量行为不变。`--fast` 模式 MAY 对指定的重检查使用输入指纹等价缓存：当检查命令、core 校验器内容与声明输入文件集合的指纹与上次实际执行的 PASS 记录一致时，MAY 沿用该结果，并 MUST 在该检查行内透明标注指纹、上次实际执行时间与“沿用”来源；任一输入、命令或实现变化，缓存缺失、损坏或格式非法，或上次结果非 PASS 时 SHALL 重新实际执行。`--require-openspec` 与默认全量模式 SHALL NOT 读取或写入该缓存。标准模式 Verify 终验 SHALL 运行 `--fast` 加变更相关目标与回归测试；严格模式 Verify SHALL 运行 `--require-openspec`。Archive SHALL 按“Archive 验证必须按 Verify 后变化选择层级”执行轻量或升级后的 required 门禁，而不是按模式无条件重复完整门禁。变更若触及工作流入口、技能、校验器或安装资产，其标准模式 Verify 终验 SHALL 亦使用全量门禁。
+
+#### Scenario: 标准模式内容变更的 Verify 终验
+
+- **WHEN** 一个未触及工作流治理资产的标准变更到达 Verify 终验
+- **THEN** 主会话现跑 `bash scripts/validate-workflow.sh --fast` 与目标/回归测试并读取退出结果
+- **AND** Archive 按 Verify 后 diff 分类运行轻量或升级后的 required 门禁，FAIL=0 才可声称归档完成
+
+#### Scenario: fast 暖缓存命中
+
+- **WHEN** `--fast` 模式下某重检查的命令、输入文件与 core 实现均与上次实际执行的 PASS 记录一致
+- **THEN** 该检查输出 PASS 并透明标注指纹、上次实际执行时间与沿用来源
+- **AND** 顶层汇总仍按 PASS 计数，不新增第四种检查状态
+
+#### Scenario: 缓存输入变化
+
+- **WHEN** 重检查任一输入文件、检查命令或 core 实现在上次 PASS 后发生变化
+- **THEN** 该检查重新实际执行并按新结果更新或清除缓存
+
+#### Scenario: 严格模式不得降级
+
+- **WHEN** 严格模式变更进入 Verify
+- **THEN** 门禁命令保持 `bash scripts/validate-workflow.sh --require-openspec`
+- **AND** 不因任何分层或缓存能力改为 `--fast`，也不读取缓存结果
+- **AND** 其 Archive 若发生 Verify 后治理语义变化，同样升级为 required 门禁
+
+#### Scenario: 治理资产变更保持全量
+
+- **WHEN** 标准模式变更修改了 CLAUDE/AGENTS、技能、校验器或安装资产
+- **THEN** 其 Verify 终验运行全量门禁而非 `--fast`
+
+### Requirement: 仓库技能优先于宿主插件技能
+
+当宿主环境提供的插件技能与仓库技能职责重叠(如同名或同触发条件的 TDD、调试、审查类技能)时,助手 SHALL 以仓库技能(`.claude/skills/`、`.codex/skills/` 及其共享正文)为准;插件技能 SHALL 仅在仓库技能未覆盖的空缺时补充使用。该仲裁 SHALL 同步声明于 `CLAUDE.md` 与 `AGENTS.md`,并随安装资产的通用入口分发。
+
+#### Scenario: 宿主插件提供同名 TDD 技能
+
+- **WHEN** 宿主同时加载了仓库 tdd 技能与插件 TDD 技能
+- **THEN** 助手按仓库 tdd 技能的红—绿—重构与适用边界执行
+- **AND** 不因插件技能的存在产生第二套触发或仪式
+
+#### Scenario: 仓库技能未覆盖的空缺
+
+- **WHEN** 某任务无对应仓库技能而插件技能可用
+- **THEN** 可以使用插件技能,并在汇报中注明所用技能来源
+
+### Requirement: 工作流技能正文必须精炼且示例可迁移
+
+工作流技能正文 SHALL 不含对未随仓库迁移的源文档的叙事性注记；技能示例 SHALL 引用本仓库实际技术栈（bash/python 安装器与校验器）或保持技术无关，不得以其他技术栈专有场景为主要示例。writing-skills 的 token 效率验证 SHALL 使用对中文正文可判的去空白字符口径，并 SHALL 遵守其为本仓库技能定义的同一结构与效率规则。结构校验 SHALL 守护：writing-skills、parallel-agents、systematic-debugging 双树正文迁移注记零残留，且字符口径验证命令与技能编辑场景重跑绑定句在 writing-skills 双树中存在。
+
+#### Scenario: 技能正文无迁移叙事残留
+
+- **WHEN** 维护者查看 writing-skills、parallel-agents、systematic-debugging 的双树正文
+- **THEN** 不出现"未随本仓库迁移"字样
+- **AND** 示例不引用 TypeScript 测试文件名或 macOS 专有签名/钥匙串命令
+
+#### Scenario: 注入迁移注记必红
+
+- **WHEN** 向任一受守护技能的任一侧正文注入一行"未随本仓库迁移"注记
+- **THEN** 结构校验返回非零并指出该技能
+
+#### Scenario: 字符口径可判中文
+
+- **WHEN** writing-skills 的 token 效率验证命令运行于中文 SKILL.md
+- **THEN** 输出为去空白字符数，可对照技能内登记的字符阈值判定
+
+### Requirement: 严格模式的第二次确认必须由计划风险触发
+
+严格模式 SHALL 在 Open 四件套获得规范确认后进入独立 Design。若独立计划包含权限或资金行为、数据库 Schema/迁移、数据删除、破坏性动作、外部副作用，或引入规范确认中没有覆盖的选择、假设、依赖及范围，系统 SHALL 将状态置为`待确认计划`并等待第二次实施前确认。若计划只把已确认设计展开为可执行步骤且不包含上述风险，系统 MAY 在完成计划自审后直接进入 Build；用户明确要求查看计划时仍 SHALL 等待确认。
+
+#### Scenario: Schema 变更生成实施计划
+
+- **WHEN** 严格计划包含数据库字段、索引、迁移或数据回填
+- **THEN** 系统必须请求第二次计划确认
+- **AND** 未确认前不得实现
+
+#### Scenario: 工作流文本与测试按已确认方案展开
+
+- **WHEN** 严格变更不涉及业务运行时、数据迁移或外部副作用
+- **AND** 独立计划没有引入规范之外的新选择或范围
+- **THEN** 系统完成计划自审后可以连续进入 Build
+- **AND** 计划和状态推进仍须记录在 OpenSpec 真源中
+
+#### Scenario: 用户要求查看所有严格计划
+
+- **WHEN** 用户明确要求实施前查看独立计划
+- **THEN** 系统将状态置为`待确认计划`并等待用户确认
+
+### Requirement: 严格任务级审查必须绑定高风险实现单元
+
+严格模式 SHALL 对权限、资金、Schema/迁移、数据删除、并发一致性、跨服务契约和不可逆副作用等高风险实现单元执行任务级审查；多个 checklist 若共同构成同一风险边界 SHALL 合并为一次审查。纯机械适配、文档同步和同一风险单元内的测试补充 SHALL NOT 各自触发完整任务级审查。Verify 仍 SHALL 保留规格符合性与代码质量两个独立关注面。
+
+#### Scenario: 多个步骤共同实现一个并发边界
+
+- **WHEN** 三个 checklist 分别增加条件写、竞争测试和日志，但共同保证同一个并发不变量
+- **THEN** 系统按该并发不变量形成一个任务级审查单元
+- **AND** 不机械执行三次完整审查
+
+#### Scenario: 严格变更包含多个独立高风险边界
+
+- **WHEN** 同一变更同时修改权限判定和数据库迁移
+- **THEN** 两个风险边界分别获得任务级审查
+- **AND** Verify 阶段继续执行两个独立关注面
+
+### Requirement: Archive 验证必须按 Verify 后变化选择层级
+
+Archive SHALL 对归档后的主规格、目录结构、OpenSpec、diff 与 Git 状态运行新鲜校验。若最新有效 Verify 完整门禁通过后仅发生 proposal 状态更新、delta 到主规格的语义保持合并、目录移动、索引和知识沉淀，Archive SHALL 使用归档专用轻量门禁，不重复顶层契约套件。若工作流可执行文件、助手入口、技能语义、契约测试或其他运行时/治理语义在 Verify 后发生变化，Archive SHALL 重新运行完整 required 门禁。
+
+#### Scenario: 归档只产生机械状态变化
+
+- **WHEN** Verify 后仅移动已审查文件、合并已审查 delta、更新状态与索引
+- **THEN** Archive 运行 core、OpenSpec required、diff 和 Git 状态检查
+- **AND** 不重复运行耗时的顶层契约套件
+
+#### Scenario: 归档阶段修正工作流规则
+
+- **WHEN** Archive 为通过校验而修改阶段技能、校验脚本或治理语义
+- **THEN** 轻量门禁升级为完整 required 门禁
+- **AND** 完整门禁失败时不得归档
+
+### Requirement: 已归档审查缓存必须可安全清理
+
+`.ai-local` SHALL 只保存本地运行时锁和活跃审查缓存，不作为变更状态或永久证据真源。Archive 在持久归档记录包含最终 manifest ID、逐仓 comparison base、finding 处置、未验证范围和残余风险后 MAY 删除该变更的本地 review 目录；活跃变更、STALE 待处理审查或尚未持久化最终证据的目录 SHALL NOT 被自动清理。
+
+#### Scenario: 变更完成归档
+
+- **WHEN** 最终审查身份与结论已经写入归档 tasks 或 review 记录
+- **AND** 变更状态已置为已归档
+- **THEN** 对应 `.ai-local/reviews/<change>/` 可作为缓存清理
+- **AND** 删除缓存不影响 OpenSpec 状态、规格或审查可追溯性
+
+#### Scenario: 变更仍在复审
+
+- **WHEN** manifest 为 STALE、仍有开放 finding 或 proposal 尚未归档
+- **THEN** 系统保留该 review 目录
+- **AND** 不把缓存清理当作关闭 finding 的手段
+
+### Requirement: 流程语义必须在双运行时文档和安装资产中保持一致
+
+Codex 与 Claude 根入口、用户文档、共享知识总览、阶段技能和便携安装资产 SHALL 表达同一套风险分级语义：标准模式三件套加条件 design、严格模式第二次确认由硬风险触发、任务级审查按高风险实现单元组织，以及 Archive 按 Verify 后变化选择轻量或完整门禁。自动化回归 SHALL 覆盖双入口、关键文档和安装资产中的旧口径回归。
+
+#### Scenario: Claude 入口保留旧标准口径
+
+- **WHEN** Claude 根入口或其安装资产重新要求标准模式固定创建 design
+- **THEN** 工作流契约测试失败
+- **AND** 安装产物不得被判为与 Codex 语义一致
+
+#### Scenario: 用户文档保留旧归档口径
+
+- **WHEN** README、使用介绍或共享 overview 要求归档后一律重复完整契约套件
+- **THEN** mutation/契约测试失败
+- **AND** 文档必须同步 archive-light 与自动升级语义
+
+#### Scenario: 安装资产保留旧严格确认口径
+
+- **WHEN** 便携安装资产要求所有严格计划无条件二次确认
+- **THEN** 工作流回归失败
+- **AND** 安装器不得把旧语义发布到目标项目

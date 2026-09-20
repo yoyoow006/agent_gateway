@@ -7,8 +7,8 @@
 | 模式 | Codex 行为 |
 |---|---|
 | 快速 | 当前工作区直接修改与针对性验证，不建 OpenSpec、不派代理、不自动提交 |
-| 标准 | Open 一次产出四件套并一次确认；小任务主会话直执，最多一次综合审查 |
-| 严格 | 完整五阶段、隔离 worktree、任务级审查和 Verify 双阶段审查 |
+| 标准 | Open 一次产出三件套（必要时增加 design）并一次确认；小任务主会话直执，最多一次综合审查 |
+| 严格 | 完整五阶段、隔离 worktree、按高风险实现单元审查和 Verify 双阶段审查；第二次计划确认由硬风险触发 |
 
 风险分类、状态与共享底线以根 [AGENTS.md](../AGENTS.md) 为准；阶段细节以 `.codex/skills/<名>/SKILL.md` 为准。行为回归场景在 `scripts/workflow-pressure-scenarios.md`。
 

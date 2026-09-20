@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -20,6 +22,13 @@ REQUIRED_PROJECT_FIELDS = {
 REQUIRED_APPLICATION_FIELDS = {
     "server", "module", "main_class", "source_path"
 }
+REQUIRED_BUSINESS_TERM_FIELDS = {
+    "term", "source_paths"
+}
+VERIFICATION_FIELDS = {
+    "build_command", "test_command", "evidence", "verified_commit"
+}
+COMMIT_PATTERN = re.compile(r"[0-9a-fA-F]{40}|[0-9a-fA-F]{64}")
 SENSITIVE_SUFFIXES = {
     ".key", ".pem", ".p12", ".pfx", ".crt", ".cer", ".jks", ".keystore"
 }
@@ -60,6 +69,175 @@ def _within(path: Path, parent: Path, label: str) -> Path:
 
 def _validated_child(parent: Path, relative: str, label: str) -> Path:
     return _within(parent / relative, parent, label)
+
+
+def _business_terms(
+    raw_terms: Any, project_name: str
+) -> list[dict[str, Any]]:
+    if not isinstance(raw_terms, list):
+        raise InputError(
+            f"project {project_name} business_terms must be a list"
+        )
+    checked_terms: list[dict[str, Any]] = []
+    seen_terms: set[str] = set()
+    for term_index, raw_term in enumerate(raw_terms):
+        if (
+            not isinstance(raw_term, dict)
+            or not REQUIRED_BUSINESS_TERM_FIELDS.issubset(raw_term)
+        ):
+            raise InputError(
+                f"project {project_name} business_term[{term_index}] "
+                "is missing required fields"
+            )
+        term = dict(raw_term)
+        term["term"] = _string(
+            term["term"],
+            f"project {project_name} business_term[{term_index}].term",
+        )
+        if term["term"] in seen_terms:
+            raise InputError(
+                f"duplicate business term for project {project_name}: "
+                f"{term['term']}"
+            )
+        seen_terms.add(term["term"])
+
+        synonyms = term.get("synonyms", [])
+        if not isinstance(synonyms, list):
+            raise InputError(
+                f"project {project_name} business_term[{term_index}] "
+                "synonyms must be a list"
+            )
+        term["synonyms"] = [
+            _string(
+                synonym,
+                f"project {project_name} business_term[{term_index}] synonym",
+            )
+            for synonym in synonyms
+        ]
+
+        source_paths = term["source_paths"]
+        if not isinstance(source_paths, list) or not source_paths:
+            raise InputError(
+                f"project {project_name} business_term[{term_index}] "
+                "source_paths must be a non-empty list"
+            )
+        term["source_paths"] = [
+            _relative(
+                source_path,
+                f"project {project_name} business_term[{term_index}] source path",
+                allow_dot=True,
+            )
+            for source_path in source_paths
+        ]
+        checked_terms.append(term)
+    return checked_terms
+
+
+def _verification(
+    raw_verification: Any, project_name: str, ai_root: Path
+) -> dict[str, str]:
+    if not isinstance(raw_verification, dict):
+        raise InputError(f"project {project_name} verification must be an object")
+    unknown_fields = set(raw_verification) - VERIFICATION_FIELDS
+    if unknown_fields:
+        raise InputError(
+            f"project {project_name} verification has unknown fields: "
+            + ", ".join(sorted(unknown_fields))
+        )
+    if not raw_verification:
+        raise InputError(
+            f"project {project_name} verification must declare at least one field"
+        )
+
+    checked = dict(raw_verification)
+    for field in ("build_command", "test_command"):
+        if field in checked:
+            checked[field] = _string(
+                checked[field], f"project {project_name} verification {field}"
+            )
+    if "evidence" in checked:
+        checked["evidence"] = _relative(
+            checked["evidence"],
+            f"project {project_name} verification evidence",
+        )
+        evidence_path = _validated_child(
+            ai_root,
+            checked["evidence"],
+            f"project {project_name} verification evidence",
+        )
+        if not evidence_path.is_file():
+            raise InputError(
+                f"missing verification evidence for project {project_name}: "
+                f"{checked['evidence']}"
+            )
+        if _is_sensitive(checked["evidence"]):
+            raise InputError(
+                f"project {project_name} verification evidence path is sensitive: "
+                f"{checked['evidence']}"
+            )
+    if "verified_commit" in checked:
+        commit = _string(
+            checked["verified_commit"],
+            f"project {project_name} verification verified_commit",
+        )
+        if COMMIT_PATTERN.fullmatch(commit) is None:
+            raise InputError(
+                f"project {project_name} verified_commit must be "
+                "40 or 64 hexadecimal characters"
+            )
+        checked["verified_commit"] = commit
+    return checked
+
+
+def _validate_dependencies(projects: list[dict[str, Any]]) -> None:
+    names = {project["name"] for project in projects}
+    graph: dict[str, list[str]] = {}
+    for project in projects:
+        name = project["name"]
+        if "dependencies" not in project:
+            continue
+        dependencies = project["dependencies"]
+        if not isinstance(dependencies, list):
+            raise InputError(f"project {name} dependencies must be a list")
+        checked: list[str] = []
+        seen: set[str] = set()
+        for dependency in dependencies:
+            dependency = _string(dependency, f"project {name} dependency")
+            if dependency not in names:
+                raise InputError(
+                    f"unregistered dependency for project {name}: {dependency}"
+                )
+            if dependency == name:
+                raise InputError(f"project {name} must not depend on itself")
+            if dependency in seen:
+                raise InputError(
+                    f"duplicate dependency for project {name}: {dependency}"
+                )
+            seen.add(dependency)
+            checked.append(dependency)
+        graph[name] = checked
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    cycle_path: list[str] = []
+
+    def visit(name: str) -> None:
+        if name in visited:
+            return
+        if name in visiting:
+            cycle_at = cycle_path.index(name)
+            cycle = cycle_path[cycle_at:] + [name]
+            raise InputError("dependency cycle: " + " -> ".join(cycle))
+        visiting.add(name)
+        cycle_path.append(name)
+        for dependency in graph.get(name, []):
+            visit(dependency)
+        cycle_path.pop()
+        visiting.remove(name)
+        visited.add(name)
+
+    for name in sorted(graph):
+        visit(name)
 
 
 def load_registry(workspace_arg: str) -> tuple[Path, list[dict[str, Any]]]:
@@ -132,8 +310,25 @@ def load_registry(workspace_arg: str) -> tuple[Path, list[dict[str, Any]]]:
             )
             checked_apps.append(app)
         project["applications"] = checked_apps
+        if "dependencies" in project:
+            raw_dependencies = project["dependencies"]
+            if not isinstance(raw_dependencies, list):
+                raise InputError(f"project {name} dependencies must be a list")
+            project["dependencies"] = [
+                _string(dependency, f"project {name} dependency")
+                for dependency in raw_dependencies
+            ]
+        if "verification" in project:
+            project["verification"] = _verification(
+                project["verification"], name, ai_root
+            )
+        if "business_terms" in project:
+            project["business_terms"] = _business_terms(
+                project["business_terms"], name
+            )
         project["_workspace"] = workspace
         validated.append(project)
+    _validate_dependencies(validated)
     return workspace, validated
 
 
@@ -147,7 +342,179 @@ def resolve_project_root(project: dict[str, Any]) -> Path:
         _validated_child(
             project_root, app["source_path"], f"project {name} application"
         )
+    for business_term in project.get("business_terms", []):
+        for source_path in business_term["source_paths"]:
+            _validated_child(
+                project_root,
+                source_path,
+                f"project {name} business term source path",
+            )
     return project_root
+
+
+def _git_metadata_target(
+    raw_target: str, base: Path, workspace: Path, label: str
+) -> Path:
+    target = Path(raw_target)
+    if not target.is_absolute():
+        target = base / target
+    return _within(target.resolve(), workspace, label)
+
+
+def _validate_metadata_path(path: Path, workspace: Path, label: str) -> None:
+    components: list[Path] = []
+    current = path
+    while current != current.parent:
+        components.append(current)
+        current = current.parent
+    for component in reversed(components):
+        if component.is_symlink():
+            _within(
+                component.resolve(),
+                workspace,
+                label,
+            )
+
+
+def _validated_git_entry(project: dict[str, Any]) -> Path | None:
+    project_root = resolve_project_root(project)
+    git_entry = project_root / ".git"
+    if not git_entry.exists():
+        return None
+
+    workspace: Path = project["_workspace"]
+    original_entry = git_entry
+    if git_entry.is_symlink():
+        original_entry = _git_metadata_target(
+            str(git_entry),
+            git_entry.parent,
+            workspace,
+            f"project {project['name']} Git metadata",
+        )
+    elif git_entry.is_file():
+        try:
+            content = git_entry.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError) as exc:
+            raise InputError(
+                f"cannot read project {project['name']} Git metadata: {exc}"
+            ) from exc
+        if not content.startswith("gitdir:"):
+            raise InputError(
+                f"invalid project {project['name']} Git metadata file"
+            )
+        original_entry = _git_metadata_target(
+            content.removeprefix("gitdir:").strip(),
+            git_entry.parent,
+            workspace,
+            f"project {project['name']} Git metadata",
+        )
+
+    metadata_roots = [original_entry]
+    current = original_entry
+    seen_common: set[Path] = set()
+    while True:
+        commondir = current / "commondir"
+        _validate_metadata_path(
+            commondir,
+            workspace,
+            f"project {project['name']} Git metadata symlink",
+        )
+        if not commondir.is_file():
+            break
+        if current in seen_common:
+            raise InputError(
+                f"project {project['name']} Git commondir cycle"
+            )
+        seen_common.add(current)
+        try:
+            raw_common = (current / "commondir").read_text(
+                encoding="utf-8"
+            ).strip()
+        except (OSError, UnicodeError) as exc:
+            raise InputError(
+                f"cannot read project {project['name']} Git commondir: {exc}"
+            ) from exc
+        current = _git_metadata_target(
+            raw_common,
+            current,
+            workspace,
+            f"project {project['name']} Git commondir",
+        )
+        metadata_roots.append(current)
+
+    for metadata_root in metadata_roots:
+        alternates = metadata_root / "objects/info/alternates"
+        _validate_metadata_path(
+            alternates,
+            workspace,
+            f"project {project['name']} Git metadata symlink",
+        )
+        if alternates.is_file():
+            try:
+                alternate_lines = alternates.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeError) as exc:
+                raise InputError(
+                    f"cannot read project {project['name']} Git alternates: {exc}"
+                ) from exc
+            for alternate in alternate_lines:
+                if alternate and not alternate.startswith("#"):
+                    _git_metadata_target(
+                        alternate,
+                        metadata_root / "objects",
+                        workspace,
+                        f"project {project['name']} Git alternate object store",
+                    )
+        for path in metadata_root.rglob("*"):
+            if path.is_symlink():
+                _within(
+                    path.resolve(),
+                    workspace,
+                    f"project {project['name']} Git metadata symlink",
+                )
+    return git_entry
+
+
+def _git_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    for name in list(environment):
+        if name == "GIT" or name.startswith("GIT_"):
+            environment.pop(name, None)
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    environment["GIT_CONFIG_GLOBAL"] = "/dev/null"
+    environment["GIT_CONFIG_SYSTEM"] = "/dev/null"
+    environment["GIT_OPTIONAL_LOCKS"] = "0"
+    environment["PAGER"] = "cat"
+    return environment
+
+
+def _git_command(project_root: Path, *command: str) -> list[str]:
+    return [
+        "git", "--literal-pathspecs", "-C", str(project_root),
+        "--work-tree", str(project_root),
+        "-c", "core.fsmonitor=false",
+        "-c", "core.hooksPath=/dev/null",
+        "-c", "core.attributesFile=/dev/null",
+        "-c", "core.excludesFile=/dev/null",
+        "-c", "core.pager=cat",
+        *command,
+    ]
+
+
+def _current_git_head(project_root: Path) -> str | None:
+    try:
+        result = subprocess.run(
+            _git_command(project_root, "rev-parse", "HEAD"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            env=_git_environment(),
+        )
+    except OSError:
+        return None
+    current = result.stdout.decode("utf-8", errors="replace").strip()
+    if result.returncode == 0 and COMMIT_PATTERN.fullmatch(current):
+        return current
+    return None
 
 
 def select_projects(projects: list[dict[str, Any]], names: list[str] | None) -> list[dict[str, Any]]:
@@ -167,6 +534,13 @@ def select_projects(projects: list[dict[str, Any]], names: list[str] | None) -> 
 def project_context(projects: list[dict[str, Any]], name: str) -> int:
     project = select_projects(projects, [name])[0]
     project_root = resolve_project_root(project)
+    verification = project.get("verification", {})
+    git_entry = (
+        _validated_git_entry(project)
+        if "verified_commit" in verification
+        else None
+    )
+    current_head = _current_git_head(project_root) if git_entry else None
     status = "available" if project_root.is_dir() else "missing"
     print("\t".join([
         "PROJECT", project["name"], project["path"], project["build"],
@@ -177,6 +551,26 @@ def project_context(projects: list[dict[str, Any]], name: str) -> int:
             "APPLICATION", app["server"], app["module"], app["main_class"],
             app["source_path"],
         ]))
+    for dependency in project.get("dependencies", []):
+        print(f"DEPENDENCY\t{dependency}")
+    for field, label in (
+        ("build_command", "build"),
+        ("test_command", "test"),
+    ):
+        if field in verification:
+            print(f"VERIFICATION\t{label}\t{verification[field]}")
+    if "evidence" in verification:
+        print(f"VERIFICATION\tevidence\t{verification['evidence']}")
+    if "verified_commit" in verification:
+        declared = verification["verified_commit"]
+        status = "unavailable"
+        if current_head is not None:
+            status = (
+                "current"
+                if current_head.lower() == declared.lower()
+                else "drifted"
+            )
+        print(f"VERIFICATION\tverified_commit\t{status}\t{declared}")
     return 0
 
 
@@ -212,16 +606,28 @@ def server_registry(
     return 0
 
 
-def _git_candidates(project_root: Path, roots: list[str]) -> list[str]:
-    if not (project_root / ".git").exists():
+def _git_candidates(
+    project: dict[str, Any], project_root: Path, roots: list[str]
+) -> list[str]:
+    if _validated_git_entry(project) is None:
         raise InputError(f"project is not a Git working tree: {project_root.name}")
-    command = [
-        "git", "--literal-pathspecs", "-C", str(project_root), "ls-files", "-z", "--cached", "--others",
+    command = _git_command(
+        project_root,
+        "ls-files", "-z", "--cached", "--others",
         "--exclude-standard", "--", *roots,
-    ]
-    result = subprocess.run(
-        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
     )
+    try:
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            env=_git_environment(),
+        )
+    except OSError as exc:
+        raise InputError(
+            f"cannot execute Git for project {project['name']}: {exc}"
+        ) from exc
     if result.returncode:
         message = result.stderr.decode("utf-8", errors="replace").strip()
         raise InputError(f"cannot list project files: {message}")
@@ -256,6 +662,43 @@ def _is_sensitive(relative: str) -> bool:
     return any(part in {"secrets", "credentials", ".ssh", ".gnupg"} for part in lowered)
 
 
+def business_terms(
+    projects: list[dict[str, Any]], names: list[str] | None, text: str,
+    limit: int, offset: int, exact: bool,
+) -> int:
+    text = _string(text, "business term")
+    if limit < 1 or offset < 0:
+        raise InputError("limit must be positive and offset must be non-negative")
+    selected = select_projects(projects, names)
+    matches: list[str] = []
+    for project in selected:
+        resolve_project_root(project)
+        for declaration in project.get("business_terms", []):
+            candidates = [declaration["term"], *declaration["synonyms"]]
+            matched = (
+                any(text == candidate for candidate in candidates)
+                if exact
+                else any(text in candidate for candidate in candidates)
+            )
+            if not matched:
+                continue
+            for source_path in declaration["source_paths"]:
+                matches.append("\t".join([
+                    "BUSINESS_TERM", declaration["term"], project["name"],
+                    project["card"], source_path,
+                ]))
+    page = matches[offset:offset + limit]
+    if not page:
+        print("no business term matches", file=sys.stderr)
+        return EXIT_ZERO_MATCH
+    for match in page:
+        print(match)
+    next_offset = offset + len(page)
+    if next_offset < len(matches):
+        print(f"TRUNCATED\tnext_offset={next_offset}\ttotal={len(matches)}", file=sys.stderr)
+    return 0
+
+
 def workspace_search(
     projects: list[dict[str, Any]], names: list[str] | None, text: str,
     limit: int, offset: int,
@@ -274,7 +717,7 @@ def workspace_search(
                 raise InputError(f"project is not checked out: {project['name']}")
             continue
         roots = project["search_roots"]
-        for relative in _git_candidates(project_root, roots):
+        for relative in _git_candidates(project, project_root, roots):
             if _has_symlink_component(project_root, relative):
                 continue
             candidate = _validated_child(
@@ -321,6 +764,14 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("--project", action="append")
     search.add_argument("--limit", type=int, default=20)
     search.add_argument("--offset", type=int, default=0)
+
+    terms = commands.add_parser("business-terms")
+    terms.add_argument("--workspace", required=True)
+    terms.add_argument("--text", required=True)
+    terms.add_argument("--project", action="append")
+    terms.add_argument("--exact", action="store_true")
+    terms.add_argument("--limit", type=int, default=20)
+    terms.add_argument("--offset", type=int, default=0)
     return parser
 
 
@@ -332,6 +783,11 @@ def main(argv: list[str] | None = None) -> int:
             return project_context(projects, args.project)
         if args.command == "server-registry":
             return server_registry(projects, args.server, args.project)
+        if args.command == "business-terms":
+            return business_terms(
+                projects, args.project, args.text, args.limit, args.offset,
+                args.exact,
+            )
         return workspace_search(
             projects, args.project, args.text, args.limit, args.offset
         )
