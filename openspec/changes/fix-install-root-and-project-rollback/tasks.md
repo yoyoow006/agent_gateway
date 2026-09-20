@@ -1,22 +1,22 @@
 # Tasks
 
-- [ ] 1. 行为测试先行
+- [x] 1. 行为测试先行
   - [x] 1.1 在 `internal/cli` 增加显式 root 校验测试：无效 `--root` 失败且不写盘；有效 `--root` 覆盖无效 `AGW_ROOT`。
   - [x] 1.2 在 `internal/workspace` 增加配置解析失败测试：`New()` 失败且项目目录不存在。
   - [x] 1.3 增加文档示例回归测试，禁止 README / usage guide 的示例 `base_url` 携带 `/v1`。
   - [x] 1.4 运行 `go test ./internal/cli ./internal/workspace`，确认新增测试按预期失败。
-- [ ] 2. 最小实现
+- [x] 2. 最小实现
   - [x] 2.1 在 CLI 根解析路径为显式 `--root` / `AGW_ROOT` 增加网关根校验，无效时 fail-fast。
   - [x] 2.2 将 `workspace.New()` 的配置加载移动到任何项目写盘前。
   - [x] 2.3 修正 `README.md` 与 `docs/usage-guide.md` 中携带 `/v1` 的 OpenAI/中转站示例。
   - [x] 2.4 运行 `gofmt -w` 并检查完整 diff。
-- [ ] 3. 验证
+- [x] 3. 验证
   - [x] 3.1 运行 `go test ./internal/cli ./internal/workspace -count=1`。
   - [x] 3.2 运行 `go test -race ./internal/protocol/... ./internal/provider ./internal/workspace ./internal/agent -count=1`。
   - [x] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
   - [x] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
   - [x] 3.5 运行 `openspec validate fix-install-root-and-project-rollback --strict --no-interactive`（CLI 不可用时记录 FAIL/SKIP 边界）。
-- [ ] 4. 综合审查与归档
+- [x] 4. 综合审查与归档
   - [x] 4.1 复核 F-001/F-002/F-007 的最小修复边界，确认无行为扩大。
   - [x] 4.2 一次全 diff 综合审查，记录 findings 与未验证范围。
   - [ ] 4.3 tasks 全绿且无 Critical/Important 未决后，合并 delta 并归档。

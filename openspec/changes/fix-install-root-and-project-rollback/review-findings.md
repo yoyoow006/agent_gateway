@@ -2,7 +2,7 @@
 
 ## Manifest
 
-- Final ID: `8cd549444e2c683be8e4e60241295cf0e4b9ba5fe861c5a495aac9f9e8e83930`
+- Final ID: `da3e1334e143b47fade5a429454bdf109a5a100ce5311488e641a9baa5ddf474`
 - Review ID: `3af2214e971d83e8b180dd3627ceb551b2678c21c14b5c1bf8fd0da8f46e3aa4` (delta after recording findings)
 - Repo: `/media/shitou/石头/wksource/git_me_prj/agent_gateway/projects/agent_gateway`
 - Comparison base: `main` @ `7ceb0d1293f75ad8501453eba48bd58f7512e497`
@@ -44,7 +44,7 @@ PASS.
 - `openspec validate fix-install-root-and-project-rollback --strict --no-interactive` — valid
 - `git diff --check` — PASS
 - Manifest verify before and after review — `VALID 3af2214e971d83e8b180dd3627ceb551b2678c21c14b5c1bf8fd0da8f46e3aa4`
-- Final manifest delta covers only review-findings.md and tasks.md; final verify — `VALID 8cd549444e2c683be8e4e60241295cf0e4b9ba5fe861c5a495aac9f9e8e83930`
+- Final manifest delta covers only review-findings.md and tasks.md; final verify — `VALID da3e1334e143b47fade5a429454bdf109a5a100ce5311488e641a9baa5ddf474`
 
 ## Unverified
 
