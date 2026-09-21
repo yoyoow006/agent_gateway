@@ -7,3 +7,4 @@
 - `harden-admin-method-and-upstream-auth` — 管理端点方法限制与上游认证头不可覆盖 — 严格
 - `localize-client-parse-errors` — 客户端解析错误本地 400 且不污染供应商指标 — 严格
 - `project-token-save-rollback` — 项目 token 保存与工件创建失败回滚 — 严格
+- `atomic-local-config-writes` — local.toml 同目录临时文件与原子替换 — 标准

@@ -42,3 +42,8 @@
 - `project new` 先检查同名 token，再先写 token，成功后才创建目录/模板/Git；保存失败不得产生项目副作用。
 - 工件失败回滚 local.toml 时只允许 `os.Remove` 空目录；绝不能用 `RemoveAll` 清理既有同名文件/目录。
 - Git init 失败保持 warning-only，不触发项目回滚。
+
+## local.toml 原子写入
+
+- 关键配置写盘必须使用同目录临时文件 → 写入 → fsync → close → chmod 0600 → rename，失败保留旧目标并清理 tmp。
+- 不要直接 `os.WriteFile` 覆盖 `config/local.toml`；该文件承载 admin/default/project token 与供应商池。
