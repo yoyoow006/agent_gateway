@@ -5,3 +5,4 @@
 - `default-anthropic-version-passthrough` — 同协议 Anthropic 透传补默认版本头 — 标准
 - `tighten-claude-settings-permissions` — 重写 Claude settings 时收紧 0600 权限 — 标准
 - `harden-admin-method-and-upstream-auth` — 管理端点方法限制与上游认证头不可覆盖 — 严格
+- `localize-client-parse-errors` — 客户端解析错误本地 400 且不污染供应商指标 — 严格

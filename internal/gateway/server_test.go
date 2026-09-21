@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -473,5 +474,52 @@ func TestPassthroughSSEStreamFlushed(t *testing.T) {
 	rest, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(rest), "好") {
 		t.Fatalf("后续块缺失: %q", rest)
+	}
+}
+
+func TestForwardLocalParseErrorReturns400WithoutProviderMetrics(t *testing.T) {
+	var upstreamCalls atomic.Int64
+	cfg := &config.Config{
+		Gateway:    config.GatewayCfg{DefaultToken: "agw-test-global"},
+		AdminToken: "agw-test-admin",
+	}
+	cfg.Providers = []config.Provider{
+		{Name: "a", Protocol: config.ProtocolOpenAIChat, BaseURL: "https://a.example", APIKey: "sk-a", Priority: 1, Enabled: true},
+		{Name: "b", Protocol: config.ProtocolOpenAIChat, BaseURL: "https://b.example", APIKey: "sk-b", Priority: 2, Enabled: true},
+	}
+	cfg.RebuildTokenIndex()
+	s := New(cfg, nil, nil)
+	for _, name := range []string{"a", "b"} {
+		s.clients[name] = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			upstreamCalls.Add(1)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{}`)), Header: http.Header{}}, nil
+		})}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader("{invalid"))
+	req.Header.Set("Authorization", "Bearer agw-test-global")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	if !strings.Contains(rec.Body.String(), `"error"`) {
+		t.Fatalf("body is not a protocol error body: %s", rec.Body.String())
+	}
+	if upstreamCalls.Load() != 0 {
+		t.Fatalf("upstream called %d times, want 0", upstreamCalls.Load())
+	}
+	snap := s.registry.Snapshot()
+	if len(snap) != 2 {
+		t.Fatalf("provider snapshot count = %d, want 2", len(snap))
+	}
+	for _, p := range snap {
+		if p.Requests != 0 || p.Failures != 0 || p.InFlight != 0 {
+			t.Fatalf("provider %s metrics polluted: requests=%d failures=%d inFlight=%d", p.Name, p.Requests, p.Failures, p.InFlight)
+		}
 	}
 }
