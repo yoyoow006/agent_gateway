@@ -23,6 +23,9 @@ type Runner interface {
 
 type execRunner struct{}
 
+// saveProjectConfig 可在测试中注入保存失败；生产路径始终为 config.SaveLocal。
+var saveProjectConfig = config.SaveLocal
+
 func (execRunner) Run(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
@@ -59,11 +62,48 @@ func New(root, name string, runner Runner) (token string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("读取配置失败: %w", err)
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if existing, ok := cfg.Projects[name]; ok && existing.Token != "" {
+		return "", fmt.Errorf("项目 %s 的令牌已存在", name)
+	}
+
+	// 先持久化项目令牌；失败时不产生项目目录、模板或 Git 副作用。
+	localPath := filepath.Join(root, "config", "local.toml")
+	oldLocal, hadLocal := readFileOrEmpty(localPath)
+	token = config.NewToken()
+	proj := cfg.Projects[name]
+	proj.Token = token
+	cfg.Projects[name] = proj
+	cfg.RebuildTokenIndex()
+	if err := saveProjectConfig(root, cfg); err != nil {
 		return "", err
 	}
+
+	if err := createArtifacts(dir, runner); err != nil {
+		_ = rollbackLocal(localPath, oldLocal, hadLocal)
+		// 只清理本次确认不存在、由 createArtifacts 新建的项目目录；既有普通文件/目录不得误删。
+		cleanupCreatedProject(dir)
+		return "", fmt.Errorf("创建项目工件失败（已回滚令牌）: %w", err)
+	}
+	fmt.Printf("项目 %s 已创建：%s\ngit 仓库已初始化；启动：agw run claude --project %s\n", name, dir, name)
+	return token, nil
+}
+
+// readFileOrEmpty 读取文件内容；不存在时返回空内容与 false。
+func readFileOrEmpty(path string) ([]byte, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	return data, true
+}
+
+// createArtifacts 创建项目目录、模板与 Git 仓库。
+func createArtifacts(dir string, runner Runner) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(dir, "agw.toml"), []byte(agwTomlTemplate), 0o644); err != nil {
-		return "", err
+		return err
 	}
 	if runner == nil {
 		runner = execRunner{}
@@ -71,17 +111,27 @@ func New(root, name string, runner Runner) (token string, err error) {
 	if err := runner.Run("git", "init", dir); err != nil {
 		fmt.Fprintf(os.Stderr, "警告：git init 失败（%v），项目已创建但不受版本管理\n", err)
 	}
+	return nil
+}
 
-	token = config.NewToken()
-	proj := cfg.Projects[name]
-	proj.Token = token
-	cfg.Projects[name] = proj
-	cfg.RebuildTokenIndex()
-	if err := config.SaveLocal(root, cfg); err != nil {
-		return "", err
+// rollbackLocal 尽力恢复 token 保存前的 local.toml。
+func rollbackLocal(path string, old []byte, existed bool) error {
+	if existed {
+		if err := os.WriteFile(path, old, 0o600); err != nil {
+			return err
+		}
+		return os.Chmod(path, 0o600)
 	}
-	fmt.Printf("项目 %s 已创建：%s\ngit 仓库已初始化；启动：agw run claude --project %s\n", name, dir, name)
-	return token, nil
+	return os.Remove(path)
+}
+
+// cleanupCreatedProject 仅当项目路径为空目录时移除，避免误删既有内容。
+func cleanupCreatedProject(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		return
+	}
+	_ = os.Remove(dir)
 }
 
 // Item 是项目概览。
