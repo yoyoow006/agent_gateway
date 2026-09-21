@@ -58,3 +58,9 @@
 
 - `gateway.listen` 必须在 `config.Load` 阶段通过 `net.SplitHostPort` 校验，port 必须为数字；无括号 IPv6 直接失败并提示 `[::1]:8787`。
 - 所有本地 URL（admin、healthz、Claude、Codex）必须经共享 `config.BaseURL` 用 `net.JoinHostPort` 重组，不能手写 `http://` + listen。
+
+## provider KV 与配置权限
+
+- `provider add` 的 `--model` / `--header` 必须在写盘前逐项校验 `key=value`，key/value 非空且 key 不重复；非法输入不得创建 local.toml。
+- Cobra StringArray 在同进程测试中会残留，重复数组参数要绑定包级变量并在命令 defer 清空。
+- `local.toml` 原子替换后必须 stat 并验证最终 mode 为 0600，失败不得报告保存成功。

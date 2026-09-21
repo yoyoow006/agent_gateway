@@ -511,7 +511,17 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) 
 	if err := os.Chmod(tmp, perm); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if err := os.Rename(tmp, path); err != nil {
+		return err
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if fi.Mode().Perm() != perm {
+		return fmt.Errorf("最终权限验证失败: %s mode=%o want=%o", path, fi.Mode().Perm(), perm)
+	}
+	return nil
 }
 
 // FindRoot 从 start（含）向上寻找网关仓库根（含 config/default.toml 或 go.mod）。
