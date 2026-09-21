@@ -1,0 +1,28 @@
+# Tasks
+
+- [ ] 1. TDD 红阶段
+  - [ ] 1.1 为 `workspace.New` 增加可注入保存函数；默认仍使用 `config.SaveLocal`。
+  - [ ] 1.2 增加测试：token 保存失败时不创建项目目录、agw.toml 或 .git。
+  - [ ] 1.3 增加测试：token 保存成功但项目目录创建失败时，回滚 local.toml 中本次 token 且删除项目目录。
+  - [ ] 1.4 增加测试：同名项目 token 已存在时失败且原 token 不变。
+  - [ ] 1.5 运行 workspace 测试并记录红证据。
+- [ ] 2. 最小实现
+  - [ ] 2.1 调整 `New()`：检查同名 token、生成 token、先 SaveLocal、再创建项目目录/agw.toml/git init。
+  - [ ] 2.2 项目目录或模板写入失败时恢复原 local.toml 内容并删除本次项目目录。
+  - [ ] 2.3 保持 git init 失败仅警告的成功语义。
+  - [ ] 2.4 目标测试转绿并检查完整 diff。
+- [ ] 3. 验证
+  - [ ] 3.1 运行 `go test ./internal/workspace -count=1`。
+  - [ ] 3.2 运行 `go test -race ./internal/workspace -count=1`。
+  - [ ] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [ ] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [ ] 3.5 运行 `openspec validate project-token-save-rollback --strict --no-interactive`。
+- [ ] 4. 严格审查
+  - [ ] 4.1 Build 任务级审查回滚边界：仅删除本次新建目录，不误删既有路径。
+  - [ ] 4.2 Verify 规格符合性独立审查。
+  - [ ] 4.3 Verify 代码质量独立审查。
+  - [ ] 4.4 处置全部 Critical/Important 并记录未验证范围/残余风险。
+- [ ] 5. 归档
+  - [ ] 5.1 合并 delta 到主规格。
+  - [ ] 5.2 更新 memory/kb 事实。
+  - [ ] 5.3 状态置为已归档并运行归档门禁。
