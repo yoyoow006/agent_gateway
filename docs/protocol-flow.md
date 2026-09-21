@@ -14,6 +14,7 @@ agw /v1/messages | /v1/responses | /v1/chat/completions   ← withAuth: 令牌�
    │
    └─ 跨协议供应商 ──→ 解码→IR→构建
         客户端codec.ParseRequest(body) ──→ IR（model_map 改写）──→ 供应商codec.BuildRequest
+        （解析/构建失败 = 客户端本地 400，不计供应商失败，不触发 failover / 熔断）
               │                                        │
               │                                        ▼
               │                                 上游 HTTP（认证按协议注入）

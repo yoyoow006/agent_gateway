@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +30,12 @@ func retryableStatus(code int) bool {
 	}
 	return false
 }
+
+// localRequestError 表示客户端请求解析或目标协议构建失败，不属于供应商失败。
+type localRequestError struct{ err error }
+
+func (e localRequestError) Error() string { return e.err.Error() }
+func (e localRequestError) Unwrap() error { return e.err }
 
 // handleForward 构造通用转发入口。
 func (s *Server) handleForward(clientProto config.Protocol) func(http.ResponseWriter, *http.Request, *config.Profile) {
@@ -103,14 +110,21 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, clientProto con
 			s.logger.Printf("[agw] 供应商 %s 熔断打开，跳过", p.Name)
 			continue
 		}
-		anyAttempt = true
-		s.registry.RecordRequest(p.Name)
 		resp, err := s.attempt(r, clientProto, profile, p, body)
 		if err != nil {
+			var localErr localRequestError
+			if errors.As(err, &localErr) {
+				writeError(w, clientCodec, http.StatusBadRequest, localErr.Error())
+				return
+			}
+			anyAttempt = true
+			s.registry.RecordRequest(p.Name)
 			s.registry.RecordFailure(p.Name, err.Error())
 			s.logger.Printf("[agw] 供应商 %s 尝试失败: %v", p.Name, err)
 			continue // 传输失败无上游响应，不覆盖已有真实错误
 		}
+		s.registry.RecordRequest(p.Name)
+		anyAttempt = true
 		if resp.StatusCode >= 400 {
 			errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 			resp.Body.Close()
@@ -159,12 +173,12 @@ func (s *Server) attempt(r *http.Request, clientProto config.Protocol, profile *
 		}
 		ir, err := codecFor(clientProto).ParseRequest(body)
 		if err != nil {
-			return nil, fmt.Errorf("解析客户端请求: %w", err)
+			return nil, localRequestError{err: fmt.Errorf("解析客户端请求: %w", err)}
 		}
 		ir.Model = resolveModel(ir.Model, effectiveModelMap(profile, p), p.DefaultModel)
 		buildPath, hdr, built, err := codecFor(p.Protocol).BuildRequest(ir)
 		if err != nil {
-			return nil, fmt.Errorf("构建 %s 请求: %w", p.Protocol, err)
+			return nil, localRequestError{err: fmt.Errorf("构建 %s 请求: %w", p.Protocol, err)}
 		}
 		path, extraHeader, reqBody = buildPath, hdr, built
 	}

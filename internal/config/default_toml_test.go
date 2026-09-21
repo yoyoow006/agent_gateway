@@ -127,3 +127,12 @@ func TestDocumentationProviderHeadersCannotOverrideAuth(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentationLocalClientErrors(t *testing.T) {
+	for _, path := range []string{"../../README.md", "../../docs/protocol-flow.md"} {
+		text := mustRead(t, path)
+		if !strings.Contains(text, "本地 400") || !strings.Contains(text, "不计供应商失败") {
+			t.Errorf("%s lacks local 400 and provider-metric isolation guidance", path)
+		}
+	}
+}
