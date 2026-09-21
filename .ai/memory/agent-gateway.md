@@ -31,3 +31,8 @@
 
 - `/__agw/reload` 仅 POST，`/__agw/metrics` 仅 GET；错误方法必须在 admin token 校验前返回 405 + Allow。
 - provider `headers` 先应用，协议认证 `Authorization` / `X-Api-Key` 最后注入；自定义头不能覆盖上游密钥。
+
+## 本地客户端错误
+
+- 客户端 codec 解析失败或目标协议构建失败必须包装为本地请求错误，在记录任何 provider 指标前按客户端协议返回 400。
+- 本地解析错误不得触发上游请求、failover 或熔断；`RecordRequest` 应推迟到确认不是本地构造错误之后。
