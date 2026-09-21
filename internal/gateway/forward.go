@@ -202,13 +202,14 @@ func (s *Server) attempt(r *http.Request, clientProto config.Protocol, profile *
 	if err != nil {
 		return nil, err
 	}
+	for k, v := range p.Headers {
+		upReq.Header.Set(k, v)
+	}
+	// 认证最后注入：供应商自定义 headers 不能覆盖上游认证头。
 	if p.Protocol == config.ProtocolAnthropic {
 		upReq.Header.Set("X-Api-Key", key)
 	} else {
 		upReq.Header.Set("Authorization", "Bearer "+key)
-	}
-	for k, v := range p.Headers {
-		upReq.Header.Set(k, v)
 	}
 
 	client := s.clientFor(p)

@@ -107,7 +107,7 @@ default_model = "claude-sonnet-5-relay"  # 映射未命中时兜底（未配置�
 [providers.model_map]       # 请求模型 → 实际模型；优先于 default_model
 "claude-sonnet-5" = "claude-sonnet-5-relay"
 
-[providers.headers]         # 中转站需要的自定义头
+[providers.headers]         # 中转站需要的自定义头；Authorization/X-Api-Key 不会覆盖网关注入的认证头
 "X-Title" = "agw"
 
 # connect_timeout_sec = 5   # 连接超时

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -209,6 +210,96 @@ func TestAttemptAnthropicVersionHeaders(t *testing.T) {
 			}
 			if got != tc.want {
 				t.Fatalf("Anthropic-Version = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAdminEndpointsRejectWrongMethodsBeforeAuth(t *testing.T) {
+	cfg, _ := testConfig(t, anthropicProvider("a", "http://127.0.0.1:1", 1))
+	cfg.AdminToken = "agw-test-admin"
+	s := New(cfg, func() (*config.Config, error) { return cfg, nil }, nil)
+
+	cases := []struct {
+		name string
+		req  *http.Request
+		want string
+	}{
+		{name: "GET reload rejected", req: httptest.NewRequest(http.MethodGet, "/__agw/reload", nil), want: http.MethodPost},
+		{name: "POST metrics rejected", req: httptest.NewRequest(http.MethodPost, "/__agw/metrics", nil), want: http.MethodGet},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			s.Handler().ServeHTTP(rec, tc.req)
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("status = %d, want 405; body=%s", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Allow"); got != tc.want {
+				t.Fatalf("Allow = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAttemptProviderHeadersCannotOverrideAuth(t *testing.T) {
+	body := []byte(`{"model":"claude-sonnet-5","max_tokens":1}`)
+	cases := []struct {
+		name  string
+		prov  config.Provider
+		check func(http.Header) error
+	}{
+		{
+			name: "anthropic",
+			prov: config.Provider{
+				Name: "a", Protocol: config.ProtocolAnthropic, BaseURL: "https://api.anthropic.com",
+				APIKey: "sk-real-anthropic", Enabled: true,
+				Headers: map[string]string{"X-Api-Key": "spoofed", "X-Title": "agw"},
+			},
+			check: func(h http.Header) error {
+				if got := h.Get("X-Api-Key"); got != "sk-real-anthropic" {
+					return fmt.Errorf("X-Api-Key = %q, want provider key", got)
+				}
+				if got := h.Get("X-Title"); got != "agw" {
+					return fmt.Errorf("X-Title = %q, want custom header retained", got)
+				}
+				return nil
+			},
+		},
+		{
+			name: "openai",
+			prov: config.Provider{
+				Name: "c", Protocol: config.ProtocolOpenAIChat, BaseURL: "https://api.openai.com",
+				APIKey: "sk-real-openai", Enabled: true,
+				Headers: map[string]string{"Authorization": "Bearer spoofed", "X-Title": "agw"},
+			},
+			check: func(h http.Header) error {
+				if got := h.Get("Authorization"); got != "Bearer sk-real-openai" {
+					return fmt.Errorf("Authorization = %q, want provider bearer key", got)
+				}
+				if got := h.Get("X-Title"); got != "agw" {
+					return fmt.Errorf("X-Title = %q, want custom header retained", got)
+				}
+				return nil
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured http.Header
+			cfg := &config.Config{}
+			s := New(cfg, nil, nil)
+			s.clients[tc.prov.Name] = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				captured = req.Header.Clone()
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{}`)), Header: http.Header{}}, nil
+			})}
+			clientReq := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+			_, err := s.attempt(clientReq, tc.prov.Protocol, &config.Profile{}, &tc.prov, body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := tc.check(captured); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
