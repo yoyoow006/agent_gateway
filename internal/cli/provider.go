@@ -16,10 +16,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// provider 命令是进程级单例；可重复 KV 参数在命令结束后清空，避免同进程下一次调用继承。
+var (
+	providerModels  []string
+	providerHeaders []string
+)
+
 var (
 	providerCmd = &cobra.Command{Use: "provider", Short: "管理供应商池（写回 local.toml 并热重载）"}
 	provListCmd = &cobra.Command{Use: "list", Short: "列出供应商", Run: runProviderList}
-	provAddCmd  = &cobra.Command{Use: "add <名称>", Short: "新增/更新供应商", Args: cobra.ExactArgs(1), Run: runProviderAdd}
+	provAddCmd  = &cobra.Command{Use: "add <名称>", Short: "新增/更新供应商", Args: cobra.ExactArgs(1), RunE: runProviderAdd}
 	provRmCmd   = &cobra.Command{Use: "remove <名称>", Short: "移除供应商", Args: cobra.ExactArgs(1), Run: runProviderRemove}
 	provEnCmd   = &cobra.Command{Use: "enable <名称>", Short: "启用", Args: cobra.ExactArgs(1), Run: runProviderToggle(true)}
 	provDisCmd  = &cobra.Command{Use: "disable <名称>", Short: "停用", Args: cobra.ExactArgs(1), Run: runProviderToggle(false)}
@@ -34,8 +40,8 @@ func init() {
 	provAddCmd.Flags().String("api-key", "", "密钥明文（只写入 0600 的 local.toml）")
 	provAddCmd.Flags().Int("priority", 100, "优先级，数字越小越优先")
 	provAddCmd.Flags().String("default-model", "", "模型映射未命中时使用的默认模型（缺省透传）")
-	provAddCmd.Flags().StringArray("model", nil, "模型映射 from=to（可重复）")
-	provAddCmd.Flags().StringArray("header", nil, "附加上游请求头 K=V（可重复）")
+	provAddCmd.Flags().StringArrayVar(&providerModels, "model", nil, "模型映射 from=to（可重复）")
+	provAddCmd.Flags().StringArrayVar(&providerHeaders, "header", nil, "附加上游请求头 K=V（可重复）")
 	_ = provAddCmd.MarkFlagRequired("protocol")
 	_ = provAddCmd.MarkFlagRequired("base-url")
 
@@ -71,18 +77,22 @@ func runProviderList(cmd *cobra.Command, args []string) {
 	tw.Flush()
 }
 
-func parseKVs(items []string) map[string]string {
+func parseKVs(kind string, items []string) (map[string]string, error) {
 	out := map[string]string{}
 	for _, it := range items {
 		kv := strings.SplitN(it, "=", 2)
-		if len(kv) == 2 && kv[0] != "" {
-			out[kv[0]] = kv[1]
+		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
+			return nil, fmt.Errorf("%s 参数 %q 非法，应使用 key=value 且 key/value 均非空", kind, it)
 		}
+		if _, exists := out[kv[0]]; exists {
+			return nil, fmt.Errorf("%s 参数 key 重复: %q", kind, kv[0])
+		}
+		out[kv[0]] = kv[1]
 	}
-	return out
+	return out, nil
 }
 
-func runProviderAdd(cmd *cobra.Command, args []string) {
+func runProviderAdd(cmd *cobra.Command, args []string) error {
 	root := resolveRoot()
 	cfg := loadConfig(root)
 	name := args[0]
@@ -94,22 +104,33 @@ func runProviderAdd(cmd *cobra.Command, args []string) {
 	defaultModel, _ := cmd.Flags().GetString("default-model")
 	// provider 命令是进程级单例；命令结束后重置值，避免同进程下一次调用
 	// 把本次 default-model 误当作“省略”继续写入。
-	defer func() { _ = cmd.Flags().Set("default-model", "") }()
-	models, _ := cmd.Flags().GetStringArray("model")
-	headers, _ := cmd.Flags().GetStringArray("header")
+	defer func() {
+		_ = cmd.Flags().Set("default-model", "")
+		providerModels = nil
+		providerHeaders = nil
+	}()
+	models, headers := providerModels, providerHeaders
 
 	if !config.Protocol(protocol).Valid() {
-		fatalf("协议非法: %q（anthropic | openai-chat | openai-responses）", protocol)
+		return fmt.Errorf("协议非法: %q（anthropic | openai-chat | openai-responses）", protocol)
 	}
 	if apiKeyEnv == "" && apiKey == "" {
-		fatalf("需要 --api-key-env 或 --api-key 之一")
+		return fmt.Errorf("需要 --api-key-env 或 --api-key 之一")
+	}
+	modelMap, err := parseKVs("--model", models)
+	if err != nil {
+		return err
+	}
+	headersMap, err := parseKVs("--header", headers)
+	if err != nil {
+		return err
 	}
 	existing := cfg.Provider(name)
 	np := config.Provider{
 		Name: name, Protocol: config.Protocol(protocol), BaseURL: baseURL,
 		APIKey: apiKey, APIKeyEnv: apiKeyEnv,
 		Priority: priority, Enabled: true,
-		DefaultModel: defaultModel, ModelMap: parseKVs(models), Headers: parseKVs(headers),
+		DefaultModel: defaultModel, ModelMap: modelMap, Headers: headersMap,
 	}
 	if existing != nil {
 		np.Preferred = existing.Preferred // 保留粘性标记
@@ -129,6 +150,7 @@ func runProviderAdd(cmd *cobra.Command, args []string) {
 	cfg.RebuildTokenIndex()
 	saveAndReload(root, cfg)
 	fmt.Printf("供应商 %s 已保存（protocol=%s priority=%d）\n", name, protocol, priority)
+	return nil
 }
 
 func runProviderRemove(cmd *cobra.Command, args []string) {

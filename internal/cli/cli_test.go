@@ -644,3 +644,57 @@ func TestAdminURLNormalizesIPv6Listen(t *testing.T) {
 		t.Fatalf("adminURL = %q", got)
 	}
 }
+
+func TestProviderAddRejectsInvalidKV(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "model missing equals", args: []string{"--model", "claude-sonnet-5"}},
+		{name: "model empty value", args: []string{"--model", "claude-sonnet-5="}},
+		{name: "header empty key", args: []string{"--header", "=agw"}},
+		{name: "header missing equals", args: []string{"--header", "X-Title"}},
+		{name: "duplicate model key", args: []string{"--model", "a=b", "--model", "a=c"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			os.MkdirAll(filepath.Join(root, "config"), 0o755)
+			cmd := NewRootCmd()
+			cmd.SetArgs(append([]string{
+				"provider", "add", "relay", "--root", root,
+				"--protocol", "openai-chat", "--base-url", "https://relay.example",
+				"--api-key-env", "RELAY_KEY",
+			}, tc.args...))
+			if err := cmd.Execute(); err == nil {
+				t.Fatal("invalid key/value should fail")
+			}
+			if _, err := os.Stat(filepath.Join(root, "config", "local.toml")); err == nil {
+				t.Fatal("invalid key/value must not write local.toml")
+			}
+		})
+	}
+}
+
+func TestProviderAddAcceptsValidKV(t *testing.T) {
+	root := writeRepo(t, map[string]string{"config/default.toml": ""})
+	cmd := NewRootCmd()
+	cmd.SetArgs([]string{
+		"provider", "add", "relay", "--root", root,
+		"--protocol", "openai-chat", "--base-url", "https://relay.example",
+		"--api-key-env", "RELAY_KEY",
+		"--model", "claude-sonnet-5=claude-relay",
+		"--header", "X-Title=agw",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := cfg.Provider("relay")
+	if p.ModelMap["claude-sonnet-5"] != "claude-relay" || p.Headers["X-Title"] != "agw" {
+		t.Fatalf("valid key/values not saved: model=%v headers=%v", p.ModelMap, p.Headers)
+	}
+}
