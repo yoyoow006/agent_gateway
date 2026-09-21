@@ -1,0 +1,26 @@
+# Tasks
+
+- [ ] 1. TDD 红阶段
+  - [ ] 1.1 增加跨协议非法客户端 JSON 测试：两供应商快照 requests/failures/in-flight 均为 0，响应为客户端协议 400。
+  - [ ] 1.2 增加目标构建失败测试（如无法映射内容）或最小可复现错误注入，断言 400 且无上游请求。
+  - [ ] 1.3 运行目标测试并记录当前 502 / 指标污染红证据。
+- [ ] 2. 最小实现
+  - [ ] 2.1 引入本地请求错误类型，包装 `ParseRequest` 与 `BuildRequest` 失败。
+  - [ ] 2.2 `forward()` 识别该错误，立即写客户端 400 并返回，不记录 request/failure。
+  - [ ] 2.3 保持传输错误与上游 HTTP 错误现有处理。
+  - [ ] 2.4 更新 README / protocol-flow 的错误归属说明。
+- [ ] 3. 验证
+  - [ ] 3.1 运行目标测试与相关 gateway 回归。
+  - [ ] 3.2 运行 `go test ./internal/gateway ./internal/cli -count=1`；如沙箱禁止 httptest 监听，记录环境边界。
+  - [ ] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [ ] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [ ] 3.5 运行 `openspec validate localize-client-parse-errors --strict --no-interactive`。
+- [ ] 4. 严格审查
+  - [ ] 4.1 Build 任务级审查本地错误不进入熔断的不变量。
+  - [ ] 4.2 Verify 规格符合性独立审查。
+  - [ ] 4.3 Verify 代码质量独立审查。
+  - [ ] 4.4 处置全部 Critical/Important 并记录未验证范围/残余风险。
+- [ ] 5. 归档
+  - [ ] 5.1 合并 delta 到主规格。
+  - [ ] 5.2 更新 memory/kb 事实。
+  - [ ] 5.3 状态置为已归档并运行归档门禁。
