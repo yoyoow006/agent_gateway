@@ -266,3 +266,45 @@ func TestGenerateClaudeSettingsTightensExistingPermissions(t *testing.T) {
 		t.Fatalf("permission = %o, want 600", fi.Mode().Perm())
 	}
 }
+
+func TestIPv6GatewayURLs(t *testing.T) {
+	root := t.TempDir()
+	path, err := GenerateClaudeSettings(root, "foo", "[::1]:8787", "agw-foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		Env map[string]string `json:"env"`
+	}
+	if err := json.Unmarshal(mustReadFile(t, path), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.Env["ANTHROPIC_BASE_URL"] != "http://[::1]:8787" {
+		t.Fatalf("ANTHROPIC_BASE_URL = %q", settings.Env["ANTHROPIC_BASE_URL"])
+	}
+
+	home := t.TempDir()
+	if err := EnsureCodexProfile(home, "[::1]:8787"); err != nil {
+		t.Fatal(err)
+	}
+	var profile struct {
+		Providers map[string]struct {
+			BaseURL string `toml:"base_url"`
+		} `toml:"model_providers"`
+	}
+	if _, err := toml.DecodeFile(filepath.Join(home, "agw.config.toml"), &profile); err != nil {
+		t.Fatal(err)
+	}
+	if profile.Providers["agw"].BaseURL != "http://[::1]:8787/v1" {
+		t.Fatalf("Codex base_url = %q", profile.Providers["agw"].BaseURL)
+	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}

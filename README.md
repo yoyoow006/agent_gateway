@@ -92,7 +92,7 @@ agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）�
 
 ```toml
 [gateway]
-listen = "127.0.0.1:8787"   # 仅回环；改 0.0.0.0 启动时会显著告警
+listen = "127.0.0.1:8787"   # 仅回环；IPv6 请写 [::1]:8787；改 0.0.0.0 启动时会显著告警
 # default_token / admin_token 首次启动自动生成
 
 [[providers]]

@@ -4,6 +4,7 @@
 package agent
 
 import (
+	"agent_gateway/internal/config"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -74,9 +75,13 @@ func GenerateClaudeSettings(root, project, listen, token string) (string, error)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
+	baseURL, err := config.BaseURL(listen)
+	if err != nil {
+		return "", err
+	}
 	settings := map[string]any{
 		"env": map[string]any{
-			"ANTHROPIC_BASE_URL":   "http://" + listen,
+			"ANTHROPIC_BASE_URL":   baseURL,
 			"ANTHROPIC_AUTH_TOKEN": token,
 		},
 	}
@@ -105,13 +110,17 @@ func EnsureCodexProfile(codexHome, listen string) error {
 	if err := os.MkdirAll(codexHome, 0o755); err != nil {
 		return err
 	}
+	baseURL, err := config.BaseURL(listen)
+	if err != nil {
+		return err
+	}
 	cfg := map[string]any{
 		"model_provider":           "agw",
 		"disable_response_storage": true,
 		"model_providers": map[string]any{
 			"agw": map[string]any{
 				"name":     "agw",
-				"base_url": "http://" + listen + "/v1",
+				"base_url": baseURL + "/v1",
 				"env_key":  "AGW_API_KEY",
 				"wire_api": "responses",
 			},

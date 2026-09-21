@@ -427,3 +427,43 @@ func TestSaveLocalTightensExistingPermissionsAtomically(t *testing.T) {
 		t.Fatalf("temporary file should not remain: %v", err)
 	}
 }
+
+func TestValidateListenAddress(t *testing.T) {
+	valid := []string{"127.0.0.1:8787", "[::1]:8787", ":8787", "localhost:8787"}
+	for _, listen := range valid {
+		cfg := &Config{Gateway: GatewayCfg{Listen: listen}}
+		if err := cfg.validate(); err != nil {
+			t.Errorf("validate(%q) = %v, want nil", listen, err)
+		}
+	}
+	invalid := map[string]string{
+		"127.0.0.1": "缺少 host/port",
+		"::1:8787":  "[::1]:8787",
+		"host:nota": "端口",
+		"host:":     "端口",
+	}
+	for listen, keyword := range invalid {
+		cfg := &Config{Gateway: GatewayCfg{Listen: listen}}
+		err := cfg.validate()
+		if err == nil || !strings.Contains(err.Error(), keyword) {
+			t.Errorf("validate(%q) error = %v, want keyword %q", listen, err, keyword)
+		}
+	}
+}
+
+func TestBaseURLNormalizesListenHost(t *testing.T) {
+	cases := map[string]string{
+		"127.0.0.1:8787": "http://127.0.0.1:8787",
+		"[::1]:8787":     "http://[::1]:8787",
+		":8787":          "http://:8787",
+	}
+	for listen, want := range cases {
+		got, err := BaseURL(listen)
+		if err != nil || got != want {
+			t.Errorf("BaseURL(%q) = %q,%v want %q", listen, got, err, want)
+		}
+	}
+	if _, err := BaseURL("127.0.0.1"); err == nil {
+		t.Error("BaseURL missing port should fail")
+	}
+}

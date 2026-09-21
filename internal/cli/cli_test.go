@@ -637,3 +637,10 @@ func TestStartGatewayStillDetectsImmediateExit(t *testing.T) {
 		t.Fatal("failed start must not leave pidfile")
 	}
 }
+
+func TestAdminURLNormalizesIPv6Listen(t *testing.T) {
+	cfg := &config.Config{Gateway: config.GatewayCfg{Listen: "[::1]:8787"}}
+	if got := adminURL(cfg, "/__agw/reload"); got != "http://[::1]:8787/__agw/reload" {
+		t.Fatalf("adminURL = %q", got)
+	}
+}

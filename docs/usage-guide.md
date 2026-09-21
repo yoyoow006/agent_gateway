@@ -196,7 +196,7 @@ agw serve            # 前台运行（调试用；Ctrl-C 退出）
 - 配置热重载：`agw provider add/remove/enable/disable`、`agw switch` 会自动通知网关；
   也可 `kill -HUP $(cat .run/agw.pid)`。**坏配置保留旧配置继续服务**。
   认证、协议、header 与模型映射热重载后生效；`connect_timeout_sec` / `first_byte_timeout_sec` 变更需重启网关后生效。
-- 监听地址默认 `127.0.0.1:8787`（`config/local.toml` 的 `[gateway] listen` 可改）；
+- 监听地址默认 `127.0.0.1:8787`（`[gateway] listen` 可改；IPv6 必须带括号，如 `[::1]:8787`）；
   改成非回环地址启动时会显著告警。
 
 ## 5. 安装与启动 Claude Code / Codex
