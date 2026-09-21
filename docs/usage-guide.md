@@ -144,6 +144,9 @@ agw provider add openai --protocol openai-responses --base-url https://api.opena
 - 密钥：`--api-key-env VAR`（推荐）或 `--api-key`（明文只写入 0600 的 local.toml）
 - 探测连通性：`agw provider test <名称>`（GET `/v1/models`，报告延迟）
 
+- 模型列表语义：网关自己的 `GET /v1/models` 不查询上游完整目录。配置了 `model_map` 时返回映射键；所有候选供应商都无映射时返回 `via-<供应商名>` 占位；`default_model` 仅作请求兜底，不出现在列表。
+- 日志说明：当前版本不支持配置日志级别；`log_level` 不生效，请勿依赖。
+
 ### 3.3 密钥三选一（优先级从高到低）
 
 1. `config/local.toml` 明文 `api_key`（0600）

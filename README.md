@@ -141,6 +141,8 @@ preferred = "relay"
 | `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile |
 | `agw project new/list` | 业务项目工作区（独立 git 仓库） |
 
+`GET /v1/models` 是本地注册摘要，不查询上游完整模型目录：已配置 `model_map` 时返回映射键；全部供应商均无映射时返回 `via-<供应商名>` 占位。`default_model` 不进入该列表。
+
 热重载：配置变更后 `agw provider add/switch` 自动通知网关；纯手动编辑后用 `agw reload`；也可 `kill -HUP <pid>`。坏配置保留旧配置继续服务。认证、协议、header 与模型映射热重载后生效；`connect_timeout_sec` / `first_byte_timeout_sec` 变更需重启网关后生效。
 
 ## 安全

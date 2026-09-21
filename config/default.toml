@@ -4,8 +4,7 @@
 [gateway]
 # 监听地址：保持 127.0.0.1，仅本机访问；改为 0.0.0.0 会暴露到网络，谨慎
 listen = "127.0.0.1:8787"
-# 日志级别：debug | info（默认 info）
-log_level = "info"
+# 日志说明：当前版本固定输出标准日志，不支持配置 log_level；请勿在配置中依赖该字段。
 # default_token / admin_token 首次 `agw serve/start` 时自动生成到 config/local.toml（0600）
 
 # 供应商池：同名条目在 local.toml 中按字段覆盖；priority 数字越小越优先；

@@ -169,3 +169,19 @@ func TestDocumentationIPv6ListenFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentationModelsAndLogLevelSemantics(t *testing.T) {
+	readme := mustRead(t, "../../README.md")
+	usage := mustRead(t, "../../docs/usage-guide.md")
+	for _, text := range []string{readme, usage} {
+		if !strings.Contains(text, "via-<供应商名>") || !strings.Contains(text, "default_model") {
+			t.Error("docs must explain local /v1/models mapping summary semantics")
+		}
+	}
+	if strings.Contains(mustRead(t, "../../config/default.toml"), "log_level =") {
+		t.Error("default config must not suggest ineffective log_level")
+	}
+	if !strings.Contains(usage, "log_level") || !strings.Contains(usage, "不生效") {
+		t.Error("usage guide must disclose ineffective log_level")
+	}
+}
