@@ -120,8 +120,8 @@ func (s *Server) Handler() http.Handler {
 		w.WriteHeader(200)
 		io.WriteString(w, "ok")
 	})
-	mux.HandleFunc("/__agw/metrics", s.admin(s.handleMetrics))
-	mux.HandleFunc("/__agw/reload", s.admin(s.handleReload))
+	mux.HandleFunc("/__agw/metrics", requireMethod(http.MethodGet, s.admin(s.handleMetrics)))
+	mux.HandleFunc("/__agw/reload", requireMethod(http.MethodPost, s.admin(s.handleReload)))
 	return mux
 }
 
@@ -161,6 +161,18 @@ func (s *Server) withAuth(clientProto config.Protocol, next func(http.ResponseWr
 			return
 		}
 		next(w, r, profile)
+	}
+}
+
+// requireMethod 限制管理端点方法；不匹配时在认证前返回 405。
+func requireMethod(method string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method {
+			w.Header().Set("Allow", method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		next(w, r)
 	}
 }
 

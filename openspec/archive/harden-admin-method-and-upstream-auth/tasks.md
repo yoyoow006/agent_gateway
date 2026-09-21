@@ -1,0 +1,26 @@
+# Tasks
+
+- [ ] 1. TDD 红阶段
+  - [x] 1.1 增加 handler 测试：GET `/__agw/reload` 返回 405 + Allow POST；POST `/__agw/metrics` 返回 405 + Allow GET。
+  - [x] 1.2 增加 `attempt()` RoundTripper 测试：provider 自定义 headers 不能覆盖 `Authorization` / `X-Api-Key`，非认证自定义头保留。
+  - [x] 1.3 运行目标测试并记录预期失败。
+- [ ] 2. 最小实现
+  - [x] 2.1 增加管理端点方法检查 wrapper，并按端点配置 POST/GET。
+  - [x] 2.2 调整上游头写入顺序：自定义 headers 在前、协议认证最后注入。
+  - [x] 2.3 更新 README / usage guide / default.toml 中自定义 headers 的安全边界说明。
+  - [x] 2.4 目标测试转绿并检查完整 diff。
+- [ ] 3. 验证
+  - [x] 3.1 运行 gateway 目标测试。
+  - [x] 3.2 运行 `go test ./internal/gateway ./internal/cli -count=1`，环境禁止 httptest 监听时记录边界。
+  - [x] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [x] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [x] 3.5 运行 `openspec validate harden-admin-method-and-upstream-auth --strict --no-interactive`。
+- [ ] 4. 严格审查
+  - [x] 4.1 Build 任务级审查安全不变量：方法 405 先于 token、认证最终值不可覆盖。
+  - [x] 4.2 Verify 规格符合性独立审查。
+  - [x] 4.3 Verify 代码质量独立审查。
+  - [x] 4.4 处置全部 Critical/Important 并记录未验证范围/残余风险。
+- [ ] 5. 归档
+  - [x] 5.1 合并 delta 到主规格。
+  - [x] 5.2 更新 memory/kb/rules 事实。
+  - [ ] 5.3 状态置为已归档并运行归档门禁。

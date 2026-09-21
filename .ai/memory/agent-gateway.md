@@ -26,3 +26,8 @@
 
 - README、usage guide、package doc 不得引用已被清空/移动的旧 OpenSpec 归档；引用前先确认 `openspec/specs/<能力>/spec.md` 存在。
 - `go.mod` 当前为 `go 1.24.11`；文档最低版本必须同步写 ≥1.24.11，避免 1.24.0 用户误判可直接构建。
+
+## 管理方法与上游认证
+
+- `/__agw/reload` 仅 POST，`/__agw/metrics` 仅 GET；错误方法必须在 admin token 校验前返回 405 + Allow。
+- provider `headers` 先应用，协议认证 `Authorization` / `X-Api-Key` 最后注入；自定义头不能覆盖上游密钥。

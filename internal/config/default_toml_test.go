@@ -118,3 +118,12 @@ func mustRead(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+func TestDocumentationProviderHeadersCannotOverrideAuth(t *testing.T) {
+	for _, path := range []string{"../../config/default.toml", "../../README.md", "../../docs/usage-guide.md"} {
+		text := mustRead(t, path)
+		if !strings.Contains(text, "不会覆盖网关注入的认证头") {
+			t.Errorf("%s lacks provider headers cannot override auth guidance", path)
+		}
+	}
+}

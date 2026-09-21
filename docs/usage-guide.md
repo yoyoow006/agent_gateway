@@ -140,7 +140,7 @@ agw provider add openai --protocol openai-responses --base-url https://api.opena
 - `--priority`：数字越小越优先；请求按此顺序逐家尝试
 - `--model from=to`：请求模型名 → 该供应商实际模型名（可重复）；优先于 `--default-model`
 - `--default-model MODEL`：模型映射未命中时使用的兜底模型（可应对客户端新增模型名）；`provider add` 是整条更新，省略该参数会清空既有值
-- `--header K=V`：附加给上游的自定义头（部分中转站需要，可重复）
+- `--header K=V`：附加给上游的自定义头（部分中转站需要，可重复）；`Authorization` / `X-Api-Key` 不会覆盖网关注入的认证头
 - 密钥：`--api-key-env VAR`（推荐）或 `--api-key`（明文只写入 0600 的 local.toml）
 - 探测连通性：`agw provider test <名称>`（GET `/v1/models`，报告延迟）
 
