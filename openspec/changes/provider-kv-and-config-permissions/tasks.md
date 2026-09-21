@@ -1,0 +1,22 @@
+# Tasks
+
+- [ ] 1. TDD 红阶段
+  - [ ] 1.1 增加 `TestProviderAddRejectsInvalidKV`：缺 `=`、空 key、空 value、重复 key 均失败且不写 local.toml。
+  - [ ] 1.2 扩展合法 provider add 测试：合法 model/header 保存。
+  - [ ] 1.3 增加或扩展原子配置权限测试：成功保存最终权限为 0600。
+  - [ ] 1.4 运行目标测试并记录红证据。
+- [ ] 2. 最小实现
+  - [ ] 2.1 将 `parseKVs` 改为 `parseValidatedKVs` 或等价错误返回 API。
+  - [ ] 2.2 `provider add` 在写盘前调用并 fail-fast。
+  - [ ] 2.3 `atomicWriteFile` rename 后 stat 并校验最终 mode。
+  - [ ] 2.4 目标测试转绿并检查完整 diff。
+- [ ] 3. 验证
+  - [ ] 3.1 运行 `go test ./internal/cli -run 'TestProviderAdd' -count=1`。
+  - [ ] 3.2 运行 `go test ./internal/config -run 'TestSaveLocal|TestAtomic' -count=1`。
+  - [ ] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [ ] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [ ] 3.5 运行 `openspec validate provider-kv-and-config-permissions --strict --no-interactive`。
+- [ ] 4. 审查与归档
+  - [ ] 4.1 一次全 diff 综合审查，确认非法输入无写盘、合法路径无回归。
+  - [ ] 4.2 记录 findings、未验证范围和残余风险。
+  - [ ] 4.3 通过后合并 delta、更新知识沉淀并归档。
