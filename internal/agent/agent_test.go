@@ -245,3 +245,24 @@ token = "agw-foo"
 		t.Fatal("应报错")
 	}
 }
+
+func TestGenerateClaudeSettingsTightensExistingPermissions(t *testing.T) {
+	root := t.TempDir()
+	path, err := GenerateClaudeSettings(root, "foo", "127.0.0.1:8787", "agw-first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := GenerateClaudeSettings(root, "foo", "127.0.0.1:8787", "agw-second"); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("permission = %o, want 600", fi.Mode().Perm())
+	}
+}
