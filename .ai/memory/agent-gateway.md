@@ -16,3 +16,8 @@
 ## Anthropic 版本头
 
 - 目标供应商为 Anthropic 且客户端未携带 `Anthropic-Version` 时，网关统一注入 `2023-06-01`；客户端已有值优先，不覆盖。
+
+## Claude settings 权限
+
+- `os.WriteFile` 的 0600 mode 只在创建文件时生效；重写已存在文件不会自动收紧权限。
+- 含项目令牌的 `.agw/claude-settings.*.json` 每次写入后必须 stat 并按需 chmod 0600，chmod 失败要返回错误。
