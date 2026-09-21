@@ -54,3 +54,20 @@ CLI SHALL 校验用户显式提供的 `--root` 或 `AGW_ROOT` 目录为有效网
 #### Scenario: 文档示例不会产生双重 v1
 - **WHEN** 维护者检查 README 与 usage guide 中的供应商示例
 - **THEN** OpenAI/中转站 `base_url` 示例不包含 `/v1` 路径后缀
+### Requirement: 项目令牌与目录原子性
+`agw project new` SHALL 先将项目 token 持久化到 `config/local.toml`，成功后再创建项目工件；任一后续项目创建步骤失败时 SHALL 删除本次创建的项目目录并回滚本次新增 token，且 SHALL NOT 覆盖既有同名项目 token。
+
+#### Scenario: token 保存失败
+- **WHEN** 配置有效但项目 token 写入 `config/local.toml` 失败
+- **THEN** 命令返回保存错误
+- **AND** `projects/<name>`、`agw.toml` 与 `.git` 均不存在
+
+#### Scenario: 项目目录写入失败
+- **WHEN** token 已写入但项目目录或 `agw.toml` 创建失败
+- **THEN** 命令返回项目创建错误
+- **AND** 本次写入的项目 token 从 `config/local.toml` 回滚
+- **AND** 本次创建的项目目录被删除
+
+#### Scenario: 同名项目 token 已存在
+- **WHEN** `config/local.toml` 已包含同名项目的 token
+- **THEN** `agw project new <name>` 失败且不覆盖既有 token
