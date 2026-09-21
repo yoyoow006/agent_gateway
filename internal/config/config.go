@@ -453,15 +453,40 @@ func SaveLocal(root string, cfg *Config) error {
 		return err
 	}
 	path := filepath.Join(dir, "local.toml")
-	if err := os.WriteFile(path, []byte(sb.String()), 0o600); err != nil {
+	if err := atomicWriteFile(path, []byte(sb.String()), 0o600); err != nil {
 		return err
-	}
-	// 已存在文件保留原权限位之上的收紧；WriteFile 不裁剪已存在文件权限。
-	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm() != 0o600 {
-		_ = os.Chmod(path, 0o600)
 	}
 	cfg.rebuildTokenIndex()
 	return nil
+}
+
+// atomicWriteFile 在同目录写临时文件、落盘并原子替换目标，失败时保留旧目标。
+func atomicWriteFile(path string, data []byte, perm os.FileMode) (retErr error) {
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if retErr != nil {
+			_ = os.Remove(tmp)
+		}
+	}()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // FindRoot 从 start（含）向上寻找网关仓库根（含 config/default.toml 或 go.mod）。

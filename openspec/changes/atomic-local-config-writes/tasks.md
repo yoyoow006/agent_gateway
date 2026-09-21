@@ -1,22 +1,22 @@
 # Tasks
 
 - [ ] 1. TDD 红阶段
-  - [ ] 1.1 增加测试：成功保存后内容可加载、权限 0600、无 `local.toml.tmp` 残留。
-  - [ ] 1.2 增加测试：预置旧 local.toml，目标路径被目录占位导致 rename 失败时，旧内容仍保留。
-  - [ ] 1.3 增加测试：既有文件权限为 0644 时，成功替换后新文件为 0600。
-  - [ ] 1.4 运行目标测试并记录红证据。
+  - [x] 1.1 增加测试：成功保存后内容可加载、权限 0600、无 `local.toml.tmp` 残留。
+  - [x] 1.2 增加测试：预置旧 local.toml，目标路径被目录占位导致 rename 失败时，旧内容仍保留。
+  - [x] 1.3 增加测试：既有文件权限为 0644 时，成功替换后新文件为 0600。
+  - [x] 1.4 运行目标测试并记录红证据。
 - [ ] 2. 最小实现
-  - [ ] 2.1 抽出原子写入 helper：创建同目录临时文件、写入、Sync、Chmod、Rename。
-  - [ ] 2.2 `SaveLocal()` 调用 helper；任何失败返回错误且清理临时文件。
-  - [ ] 2.3 成功后重建 token index。
-  - [ ] 2.4 目标测试转绿并检查完整 diff。
+  - [x] 2.1 抽出原子写入 helper：创建同目录临时文件、写入、Sync、Chmod、Rename。
+  - [x] 2.2 `SaveLocal()` 调用 helper；任何失败返回错误且清理临时文件。
+  - [x] 2.3 成功后重建 token index。
+  - [x] 2.4 目标测试转绿并检查完整 diff。
 - [ ] 3. 验证
-  - [ ] 3.1 运行 `go test ./internal/config -run 'TestSaveLocal|TestAtomic' -count=1`。
-  - [ ] 3.2 运行 `go test -race ./internal/config -count=1`。
-  - [ ] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
-  - [ ] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
-  - [ ] 3.5 运行 `openspec validate atomic-local-config-writes --strict --no-interactive`。
+  - [x] 3.1 运行 `go test ./internal/config -run 'TestSaveLocal|TestAtomic' -count=1`。
+  - [x] 3.2 运行 `go test -race ./internal/config -count=1`。
+  - [x] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [x] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [x] 3.5 运行 `openspec validate atomic-local-config-writes --strict --no-interactive`。
 - [ ] 4. 审查与归档
-  - [ ] 4.1 一次全 diff 综合审查，确认失败路径不破坏既有 local.toml。
-  - [ ] 4.2 记录 findings、未验证范围和残余风险。
-  - [ ] 4.3 通过后合并 delta、更新知识沉淀并归档。
+  - [x] 4.1 一次全 diff 综合审查，确认失败路径不破坏既有 local.toml。
+  - [x] 4.2 记录 findings、未验证范围和残余风险。
+  - [x] 4.3 通过后合并 delta、更新知识沉淀并归档。

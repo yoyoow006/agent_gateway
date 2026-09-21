@@ -344,3 +344,86 @@ func TestFindRootHonorsAGWRoot(t *testing.T) {
 		t.Error("invalid AGW_ROOT should error")
 	}
 }
+
+func TestSaveLocalAtomicSuccess(t *testing.T) {
+	root := writeRepo(t, nil)
+	cfg := &Config{
+		RepoRoot: root,
+		Gateway:  GatewayCfg{Listen: DefaultListen, DefaultToken: "agw-default"},
+		Projects: map[string]ProjectProfile{},
+	}
+	if err := SaveLocal(root, cfg); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "config", "local.toml")
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("perm = %v, want 0600", fi.Mode().Perm())
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("temporary file should not remain: %v", err)
+	}
+	loaded, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Gateway.DefaultToken != "agw-default" {
+		t.Fatalf("default token = %q", loaded.Gateway.DefaultToken)
+	}
+}
+
+func TestSaveLocalAtomicFailurePreservesOldFile(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		"config/default.toml": "",
+		"config/local.toml":   `admin_token = "agw-old"` + "\n",
+	})
+	// Make config directory read-only after preloading; temp creation should fail while old file remains.
+	cfgDir := filepath.Join(root, "config")
+	old := filepath.Join(cfgDir, "local.toml")
+	if err := os.Chmod(cfgDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(cfgDir, 0o755) })
+
+	cfg := &Config{
+		RepoRoot: root,
+		Gateway:  GatewayCfg{Listen: DefaultListen, DefaultToken: "agw-new"},
+		Projects: map[string]ProjectProfile{},
+	}
+	if err := SaveLocal(root, cfg); err == nil {
+		t.Fatal("temporary creation should fail")
+	}
+	data, err := os.ReadFile(old)
+	if err != nil || !strings.Contains(string(data), "agw-old") {
+		t.Fatalf("old config not preserved: %v %q", err, data)
+	}
+	if _, err := os.Stat(old + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("temporary artifact should not remain: %v", err)
+	}
+}
+
+func TestSaveLocalTightensExistingPermissionsAtomically(t *testing.T) {
+	root := writeRepo(t, nil)
+	path := filepath.Join(root, "config", "local.toml")
+	os.MkdirAll(filepath.Join(root, "config"), 0o755)
+	if err := os.WriteFile(path, []byte("admin_token = \"agw-old\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &Config{RepoRoot: root, Gateway: GatewayCfg{Listen: DefaultListen}, Projects: map[string]ProjectProfile{}}
+	if err := SaveLocal(root, cfg); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("perm = %v, want 0600", fi.Mode().Perm())
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("temporary file should not remain: %v", err)
+	}
+}
