@@ -15,7 +15,7 @@ Codex ──config.toml base_url──────►┤  ├─ 令牌→项目
 
 ## 快速开始
 
-前置：Go ≥1.24（构建）、Node.js ≥18 + npm（安装 agent）、git。完整的编译安装与使用说明见 [docs/usage-guide.md](docs/usage-guide.md)。
+前置：Go ≥1.24.11（构建）、Node.js ≥18 + npm（安装 agent）、git。完整的编译安装与使用说明见 [docs/usage-guide.md](docs/usage-guide.md)。
 
 ```bash
 # 1. 构建
@@ -168,11 +168,11 @@ gofmt -l .                                               # 应为空
 bash scripts/validate-workflow.sh --fast                 # 工作流校验
 ```
 
-架构与决策详见 `openspec/archive/add-agent-gateway/design.md`；已合并的主规格见 `openspec/specs/`：`llm-api-routing`、`protocol-translation`、`gateway-cli`、`agent-launcher`、`project-workspace`、`risk-tiered-ai-workflow`、`shared-ai-workflow-infrastructure`。
+主规格见 `openspec/specs/`：`llm-api-routing`、`protocol-translation`、`gateway-cli`、`agent-launcher`、`risk-tiered-ai-workflow`、`shared-ai-workflow-infrastructure`；历史变更记录见 `openspec/archive/README.md`。
 
 ## 已知边界
 
-- **Codex 跨协议工具编排（已支持，2026-09）**：Codex ≥0.149 的内置 exec、MCP 工具以及 `code_mode` 的 V8 JS 沙箱（`functions.exec`）通过 input 中的 `additional_tools`（namespace 树内嵌 function/custom）携带；网关在跨协议场景下做翻译：namespace 展平为点连名、function 直取 schema、custom 合成 `{code:string}` schema，响应/历史还原 `custom_tool_call`（详见 `openspec/archive/translate-additional-tools/`）。同协议（Codex↔openai-responses）仍走字节级透传，零开销。
+- **Codex 跨协议工具编排（已支持，2026-09）**：Codex ≥0.149 的内置 exec、MCP 工具以及 `code_mode` 的 V8 JS 沙箱（`functions.exec`）通过 input 中的 `additional_tools`（namespace 树内嵌 function/custom）携带；网关在跨协议场景下做翻译：namespace 展平为点连名、function 直取 schema、custom 合成 `{code:string}` schema，响应/历史还原 `custom_tool_call`（详见 `openspec/specs/protocol-translation/spec.md` 的“Codex 工具编排形态”）。同协议（Codex↔openai-responses）仍走字节级透传，零开销。
 - Codex 的 `GET /v1/responses/{id}` 单响应拉取**未路由**（返回 404）；禁用响应存储后 Codex 不使用该路径，每请求自包含全量上下文。
 - Codex 0.149+ 对 Responses 流式 `usage` 缺 `total_tokens` 严格校验（兼容处理：编码边界补 `input+output`）；item/part 事件名 `response.` 前缀在编码器统一、解码器双名兼容（兼容无前缀历史流）。
 - `count_tokens` 优先转发 anthropic 上游；不可用时返回本地粗估（字节/4，CJK 混合场景的保守近似），误差只影响上下文预算判断。

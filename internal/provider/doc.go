@@ -1,2 +1,2 @@
-// Package provider 属于 agw 网关实现，详见 openspec/changes/add-agent-gateway/design.md。
+// Package provider 属于 agw 网关实现；当前行为契约见 openspec/specs/llm-api-routing/spec.md。
 package provider

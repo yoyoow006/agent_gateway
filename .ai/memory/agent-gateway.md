@@ -21,3 +21,8 @@
 
 - `os.WriteFile` 的 0600 mode 只在创建文件时生效；重写已存在文件不会自动收紧权限。
 - 含项目令牌的 `.agw/claude-settings.*.json` 每次写入后必须 stat 并按需 chmod 0600，chmod 失败要返回错误。
+
+## 文档引用与 Go 版本
+
+- README、usage guide、package doc 不得引用已被清空/移动的旧 OpenSpec 归档；引用前先确认 `openspec/specs/<能力>/spec.md` 存在。
+- `go.mod` 当前为 `go 1.24.11`；文档最低版本必须同步写 ≥1.24.11，避免 1.24.0 用户误判可直接构建。

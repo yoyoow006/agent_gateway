@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -67,4 +68,53 @@ func TestDocumentationRoutingSemanticsMatchRuntime(t *testing.T) {
 	if !strings.Contains(template, "候选子集") || !strings.Contains(template, "priority") {
 		t.Error("workspace project template must document subset and priority ordering")
 	}
+}
+
+func TestDocumentationAndPackageReferencesResolve(t *testing.T) {
+	roots := []string{"../..", "."}
+	for _, path := range []string{"../../README.md", "../../docs/usage-guide.md", "../../docs/protocol-flow.md"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if strings.Contains(string(data), "openspec/archive/add-agent-gateway/design.md") {
+			t.Errorf("%s references missing add-agent-gateway archive", path)
+		}
+		if strings.Contains(string(data), "openspec/archive/translate-additional-tools/") {
+			t.Errorf("%s references missing translate-additional-tools archive", path)
+		}
+	}
+	docFiles, err := filepath.Glob("../*/doc.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docFiles) == 0 {
+		t.Fatal("expected package doc files")
+	}
+	for _, doc := range docFiles {
+		data, err := os.ReadFile(doc)
+		if err != nil {
+			t.Fatalf("read %s: %v", doc, err)
+		}
+		text := string(data)
+		if strings.Contains(text, "openspec/changes/add-agent-gateway/design.md") {
+			t.Errorf("%s references missing active OpenSpec change", doc)
+		}
+		if !strings.Contains(text, "openspec/specs/") {
+			t.Errorf("%s lacks a current OpenSpec spec reference", doc)
+		}
+	}
+	if !strings.Contains(mustRead(t, "../../README.md"), "Go ≥1.24.11") {
+		t.Error("README must document the go.mod minimum 1.24.11")
+	}
+	_ = roots
+}
+
+func mustRead(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
 }

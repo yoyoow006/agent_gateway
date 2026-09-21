@@ -1,2 +1,2 @@
-// Package agent 属于 agw 网关实现，详见 openspec/changes/add-agent-gateway/design.md。
+// Package agent 属于 agw 网关实现；当前行为契约见 openspec/specs/agent-launcher/spec.md。
 package agent

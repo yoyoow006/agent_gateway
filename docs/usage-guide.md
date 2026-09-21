@@ -26,7 +26,7 @@
 
 | 组件 | 要求 | 用途 |
 |---|---|---|
-| Go | ≥ 1.24（开发实测 1.24.11） | 编译网关 |
+| Go | ≥ 1.24.11 | 编译网关 |
 | Node.js + npm | ≥ 18 | `agw install` 安装 claude/codex（仅安装时需要） |
 | git | 任意近期版本 | 业务项目版本管理（可选） |
 | 操作系统 | Linux x64 优先 | Windows 为 v1 非目标 |
@@ -275,7 +275,7 @@ agw status                               # 各供应商状态：closed/open/half
   `code_mode` 的 V8 JS 沙箱（`functions.exec`）通过 input 的 `additional_tools`（namespace
   树内嵌 function/custom）携带；网关跨协议时做翻译：namespace 展平为点连名、function 直取 schema、
   custom 合成 `{code:string}` schema，响应/历史还原 `custom_tool_call`（详见
-  `openspec/archive/translate-additional-tools/`）。同协议（Codex↔openai-responses）仍走字节级透传，零开销。
+  `openspec/specs/protocol-translation/spec.md` 的“Codex 工具编排形态”）。同协议（Codex↔openai-responses）仍走字节级透传，零开销。
 - Codex 0.149+ 对 Responses 流式 `usage` 缺 `total_tokens` 严格校验（兼容处理：编码边界补 `input+output`）；
   item/part 事件名 `response.` 前缀在编码器统一、解码器双名兼容（兼容无前缀历史流）。
 - `count_tokens` 优先转发 anthropic 上游，不可用时本地粗估（字节/4，CJK 混合场景的保守近似，只影响上下文预算判断）。
