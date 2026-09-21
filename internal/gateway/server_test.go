@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"agent_gateway/internal/config"
+	"agent_gateway/internal/protocol/anthropic"
 )
 
 // upstream 模拟一个供应商。
@@ -169,6 +170,47 @@ func TestPassthroughByteFidelity(t *testing.T) {
 	}
 	if !strings.HasSuffix(captured.host, strings.TrimPrefix(up.server.URL, "http://")) {
 		t.Errorf("Host = %q", captured.host)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestAttemptAnthropicVersionHeaders(t *testing.T) {
+	body := `{"model":"claude-sonnet-5","max_tokens":1}`
+	for _, tc := range []struct {
+		name         string
+		clientHeader string
+		want         string
+	}{
+		{name: "default", want: anthropic.APIVersion},
+		{name: "client value", clientHeader: "future-version", want: "future-version"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			cfg := &config.Config{}
+			s := New(cfg, nil, nil)
+			s.clients["a"] = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				got = req.Header.Get("Anthropic-Version")
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{}`)), Header: http.Header{}}, nil
+			})}
+			clientReq := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
+			if tc.clientHeader != "" {
+				clientReq.Header.Set("Anthropic-Version", tc.clientHeader)
+			}
+			_, err := s.attempt(clientReq, config.ProtocolAnthropic, &config.Profile{}, &config.Provider{
+				Name: "a", Protocol: config.ProtocolAnthropic, BaseURL: "https://api.anthropic.com", APIKey: "sk-x", Enabled: true,
+			}, []byte(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("Anthropic-Version = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
