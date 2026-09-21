@@ -1,10 +1,14 @@
 package workspace
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
+
+	"agent_gateway/internal/config"
 )
 
 // fakeRunner 记录命令，git 存在。
@@ -126,5 +130,69 @@ func TestNewInvalidConfigLeavesNoProject(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "projects", "demo")); !os.IsNotExist(err) {
 		t.Fatalf("project directory should not exist after failure: %v", err)
+	}
+}
+
+func TestNewRefusesExistingProjectToken(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "config"), 0o755)
+	os.WriteFile(filepath.Join(root, "config", "local.toml"), []byte(`
+[projects.demo]
+token = "agw-existing"
+`), 0o600)
+
+	if _, err := New(root, "demo", &fakeRunner{}); err == nil {
+		t.Fatal("existing project token should fail")
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Projects["demo"].Token; got != "agw-existing" {
+		t.Fatalf("existing token = %q, want agw-existing", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "demo")); !os.IsNotExist(err) {
+		t.Fatalf("project directory should not exist: %v", err)
+	}
+}
+
+func TestNewTokenSaveFailureLeavesNoProject(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "config"), 0o755)
+	previous := saveProjectConfig
+	saveProjectConfig = func(string, *config.Config) error { return errors.New("disk full") }
+	t.Cleanup(func() { saveProjectConfig = previous })
+	runner := &fakeRunner{}
+
+	if _, err := New(root, "demo", runner); err == nil {
+		t.Fatal("token save failure should fail")
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "demo")); !os.IsNotExist(err) {
+		t.Fatalf("project directory should not exist: %v", err)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("git should not run: %v", runner.commands)
+	}
+}
+
+func TestNewProjectArtifactFailureRollsBackToken(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "config"), 0o755)
+	os.MkdirAll(filepath.Join(root, "projects"), 0o755)
+	existing := filepath.Join(root, "projects", "demo")
+	if err := os.WriteFile(existing, []byte("existing file"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := New(root, "demo", &fakeRunner{})
+	if err == nil {
+		t.Fatal("artifact creation should fail")
+	}
+	if data, err := os.ReadFile(existing); err != nil || string(data) != "existing file" {
+		t.Fatalf("existing path changed: %v %q", err, data)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "config", "local.toml"))
+	if err == nil && strings.Contains(string(data), "[projects.demo]") {
+		t.Fatalf("token was not rolled back: %s", data)
 	}
 }
