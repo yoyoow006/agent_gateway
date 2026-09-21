@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -98,6 +100,26 @@ type Profile struct {
 	Preferred string
 	ModelMap  map[string]string
 	Token     string
+}
+
+// BaseURL 将已校验的 listen 地址规范为本地 HTTP 基础 URL，确保 IPv6 host 加括号。
+func BaseURL(listen string) (string, error) {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return "", fmt.Errorf("gateway.listen %q 缺少 host/port（IPv6 请使用 [::1]:8787）: %w", listen, err)
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		return "", fmt.Errorf("gateway.listen 端口非法: %q", port)
+	}
+	return "http://" + net.JoinHostPort(host, port), nil
+}
+
+// validateListen 校验监听地址结构与端口。
+func validateListen(listen string) error {
+	if _, err := BaseURL(listen); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DefaultListen 是默认监听地址（仅回环）。
@@ -295,6 +317,9 @@ func overlayProject(dst *ProjectProfile, src ProjectProfile) {
 }
 
 func (c *Config) validate() error {
+	if err := validateListen(c.Gateway.Listen); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	for i, p := range c.Providers {
 		if p.Name == "" {

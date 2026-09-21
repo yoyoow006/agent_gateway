@@ -66,7 +66,11 @@ func runDir(root string) string  { return filepath.Join(root, ".run") }
 func pidPath(root string) string { return filepath.Join(root, ".run", "agw.pid") }
 func logPath(root string) string { return filepath.Join(root, ".run", "agw.log") }
 func adminURL(cfg *config.Config, path string) string {
-	return "http://" + cfg.Gateway.Listen + path
+	baseURL, err := config.BaseURL(cfg.Gateway.Listen)
+	if err != nil {
+		return ""
+	}
+	return baseURL + path
 }
 
 // adminRequest 向管理端点发请求。

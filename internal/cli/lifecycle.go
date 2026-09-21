@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,6 +13,8 @@ import (
 	"syscall"
 	"text/tabwriter"
 	"time"
+
+	"agent_gateway/internal/config"
 
 	"github.com/spf13/cobra"
 )
@@ -144,11 +145,11 @@ func gatewayRunning(root string) bool {
 var selfPath = func() (string, error) { return os.Executable() }
 
 var healthReady = func(root, listen string) bool {
-	host, port, err := net.SplitHostPort(listen)
+	baseURL, err := config.BaseURL(listen)
 	if err != nil {
 		return false
 	}
-	resp, err := http.Get("http://" + net.JoinHostPort(host, port) + "/__agw/healthz")
+	resp, err := http.Get(baseURL + "/__agw/healthz")
 	if err != nil {
 		return false
 	}

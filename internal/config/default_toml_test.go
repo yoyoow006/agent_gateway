@@ -160,3 +160,12 @@ func TestDocumentationProcessIdentityAndReadiness(t *testing.T) {
 		t.Error("usage guide lacks process identity and readiness semantics")
 	}
 }
+
+func TestDocumentationIPv6ListenFormat(t *testing.T) {
+	for _, path := range []string{"../../README.md", "../../docs/usage-guide.md"} {
+		text := mustRead(t, path)
+		if !strings.Contains(text, "[::1]:8787") {
+			t.Errorf("%s lacks bracketed IPv6 listen guidance", path)
+		}
+	}
+}

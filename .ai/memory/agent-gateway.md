@@ -53,3 +53,8 @@
 - 后台 pidfile 必须写 JSON `{pid,start_time,exe,root}`，0600；stop 前严格匹配 `/proc/<pid>/stat` starttime 与 `/proc/<pid>/exe`。
 - 旧纯 PID pidfile 和身份不可读场景都必须 fail closed，绝不发 SIGTERM。
 - `agw start` 只有 `/__agw/healthz` 成功后才写 pidfile 并报成功；子进程退出优先判失败，超时不主动杀子进程。
+
+## 监听地址与 URL Host
+
+- `gateway.listen` 必须在 `config.Load` 阶段通过 `net.SplitHostPort` 校验，port 必须为数字；无括号 IPv6 直接失败并提示 `[::1]:8787`。
+- 所有本地 URL（admin、healthz、Claude、Codex）必须经共享 `config.BaseURL` 用 `net.JoinHostPort` 重组，不能手写 `http://` + listen。

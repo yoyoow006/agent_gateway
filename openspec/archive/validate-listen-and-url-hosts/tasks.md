@@ -1,0 +1,26 @@
+# Tasks
+
+- [ ] 1. TDD 红阶段
+  - [x] 1.1 配置测试：`127.0.0.1:8787`、`[::1]:8787`、`:8787` 有效。
+  - [x] 1.2 配置测试：`127.0.0.1`、`::1:8787`、`host:notaport` 失败且错误清晰。
+  - [x] 1.3 共享 BaseURL 测试：IPv4、IPv6、空 host 与路径拼接。
+  - [x] 1.4 Agent 配置测试：IPv6 下 Claude/Codex URL 均合法。
+  - [x] 1.5 CLI adminURL 测试：IPv6 reload URL 合法。
+  - [x] 1.6 文档契约测试：README / usage guide 含 IPv6 listen 格式说明。
+- [ ] 2. 最小实现
+  - [x] 2.1 新增共享 `BaseURL(listen)` helper。
+  - [x] 2.2 `Config.validate()` 校验 listen 结构与 port。
+  - [x] 2.3 `adminURL()` 复用 helper 并处理错误路径。
+  - [x] 2.4 Claude/Codex 配置生成复用 helper。
+  - [x] 2.5 更新 README / usage-guide IPv6 示例。
+- [ ] 3. 验证
+  - [x] 3.1 运行 config/agent/CLI 目标测试。
+  - [x] 3.2 运行 `go test ./internal/config ./internal/agent -count=1`。
+  - [x] 3.3 运行 CLI URL 相关目标测试。
+  - [x] 3.4 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [x] 3.5 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [x] 3.6 运行 `openspec validate validate-listen-and-url-hosts --strict --no-interactive`。
+- [ ] 4. 审查与归档
+  - [x] 4.1 一次全 diff 综合审查，确认所有 listen 消费点统一。
+  - [x] 4.2 记录 findings、未验证范围和残余风险。
+  - [x] 4.3 通过后合并 delta、更新知识沉淀并归档。

@@ -9,3 +9,4 @@
 - `project-token-save-rollback` — 项目 token 保存与工件创建失败回滚 — 严格
 - `atomic-local-config-writes` — local.toml 同目录临时文件与原子替换 — 标准
 - `gateway-process-identity-and-readiness` — 网关 PID 身份校验与 healthz 就绪判定 — 严格
+- `validate-listen-and-url-hosts` — 监听地址校验与 IPv6 URL Host 统一 — 标准
