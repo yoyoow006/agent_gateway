@@ -83,7 +83,7 @@ func adminRequest(method, url string, cfg *config.Config) (*http.Response, error
 // reloadIfRunning 触发热重载；返回是否真正触发了 reload 与错误。
 // 网关未运行时返回 (false, nil) 并打印提示；请求失败返回 (false, err)。
 func reloadIfRunning(root string, cfg *config.Config) (bool, error) {
-	if !pidAlive(readPid(root)) {
+	if !gatewayRunning(root) {
 		fmt.Println("提示：网关未运行，配置将在下次启动时生效")
 		return false, nil
 	}

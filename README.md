@@ -132,7 +132,7 @@ preferred = "relay"
 
 | 命令 | 说明 |
 |---|---|
-| `agw serve` / `start` / `stop` | 前台 / 后台（pidfile `.run/agw.pid`、日志 `.run/agw.log`）/ 优雅停止 |
+| `agw serve` / `start` / `stop` | 前台 / 后台（healthz 就绪后写身份 pidfile `.run/agw.pid`，日志 `.run/agw.log`）/ 身份匹配后优雅停止 |
 | `agw status [--json]` / `logs [-f]` | 供应商熔断状态与计数 / 日志 |
 | `agw provider list/add/remove/enable/disable/test` | 供应商池管理；`test` 探测 `/v1/models` 延迟 |
 | `agw switch <名>` | 粘性首选 |

@@ -184,11 +184,11 @@ default_model = "gpt-5.2-safe"  # 档案与供应商映射都未命中时使用�
 ## 4. 启动与停止网关
 
 ```bash
-agw start            # 后台启动（分离进程；pidfile .run/agw.pid，日志 .run/agw.log）
+agw start            # 后台启动（分离进程；healthz 就绪后写身份 pidfile .run/agw.pid，日志 .run/agw.log）
 agw status           # 运行状态 + 供应商熔断/计数表（--json 机器可读）
 agw status --json
 agw logs -f          # 跟随日志
-agw stop             # 优雅停止（SIGTERM，排空在途请求，上限 15s）
+agw stop             # 校验 PID 身份后优雅停止（SIGTERM，排空在途请求，上限 15s；旧纯 PID pidfile 拒绝发信号）
 agw serve            # 前台运行（调试用；Ctrl-C 退出）
 ```
 

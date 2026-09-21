@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 
 	"agent_gateway/internal/config"
 )
@@ -342,8 +343,10 @@ func TestStartGatewayAlivePath(t *testing.T) {
 	okScript := filepath.Join(root, "alive.sh")
 	os.WriteFile(okScript, []byte("#!/bin/sh\nsleep 30\n"), 0o755)
 	prev := selfPath
+	prevReady := healthReady
 	selfPath = func() (string, error) { return okScript, nil }
-	defer func() { selfPath = prev }()
+	healthReady = func(string, string) bool { return true }
+	defer func() { selfPath = prev; healthReady = prevReady }()
 
 	pid, err := StartGateway(root, "127.0.0.1:8787")
 	if err != nil {
@@ -354,8 +357,9 @@ func TestStartGatewayAlivePath(t *testing.T) {
 			p.Signal(syscall.SIGKILL)
 		}
 	}()
-	if readPid(root) != pid {
-		t.Errorf("pidfile = %d want %d", readPid(root), pid)
+	identity, isJSON, err := readPidIdentity(root)
+	if err != nil || !isJSON || identity.Pid != pid || identity.Root != root {
+		t.Errorf("pidfile identity = %+v json:%v err:%v want pid=%d root=%s", identity, isJSON, err, pid, root)
 	}
 }
 
@@ -482,5 +486,154 @@ func TestResolveRootExplicitFlagOverridesEnvironment(t *testing.T) {
 
 	if got, err := resolveRootE(); err != nil || got != root {
 		t.Fatalf("resolveRootE() = %q,%v; want explicit root %q,nil", got, err, root)
+	}
+}
+
+func TestPidIdentityFileAndProcessIdentity(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(runDir(root), 0o755)
+	if _, json, err := readPidIdentity(root); json || err != nil {
+		t.Fatalf("missing pidfile = json:%v err:%v", json, err)
+	}
+	if err := os.WriteFile(pidPath(root), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, json, err := readPidIdentity(root); json || err != nil {
+		t.Fatalf("legacy pidfile = json:%v err:%v", json, err)
+	}
+
+	start, exe, ok := processIdentity(os.Getpid())
+	if !ok || start <= 0 || exe == "" {
+		t.Fatalf("current process identity unavailable: start=%d exe=%q ok=%v", start, exe, ok)
+	}
+	identity := pidIdentity{Pid: os.Getpid(), StartTime: start, Exe: exe, Root: root}
+	if err := writePidIdentity(root, identity); err != nil {
+		t.Fatal(err)
+	}
+	got, json, err := readPidIdentity(root)
+	if err != nil || !json || got.Pid != identity.Pid || got.StartTime != identity.StartTime || got.Exe != identity.Exe || got.Root != identity.Root {
+		t.Fatalf("identity roundtrip = %+v json:%v err:%v", got, json, err)
+	}
+	fi, err := os.Stat(pidPath(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("pidfile perm = %v", fi.Mode().Perm())
+	}
+	if !sameGatewayProcess(identity) {
+		t.Fatal("current identity should match")
+	}
+	wrong := identity
+	wrong.StartTime++
+	if sameGatewayProcess(wrong) {
+		t.Fatal("wrong start time must not match")
+	}
+	if _, _, ok := processIdentity(1 << 24); ok {
+		t.Fatal("unlikely pid should not have readable identity")
+	}
+}
+
+func TestStopGatewayRejectsMismatchedAndLegacyPidfiles(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(runDir(root), 0o755)
+	start, _, ok := processIdentity(os.Getpid())
+	if !ok {
+		t.Fatal("cannot read current process identity")
+	}
+	mismatch := pidIdentity{Pid: os.Getpid(), StartTime: start + 1, Exe: "/definitely/not/agw", Root: root}
+	if err := writePidIdentity(root, mismatch); err != nil {
+		t.Fatal(err)
+	}
+	if err := StopGateway(root); err == nil || !strings.Contains(err.Error(), "身份不匹配") {
+		t.Fatalf("mismatch error = %v", err)
+	}
+	if _, err := os.Stat(pidPath(root)); !os.IsNotExist(err) {
+		t.Fatalf("mismatched pidfile should be removed: %v", err)
+	}
+
+	if err := os.WriteFile(pidPath(root), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := StopGateway(root); err == nil || !strings.Contains(err.Error(), "旧 pidfile") {
+		t.Fatalf("legacy error = %v", err)
+	}
+	if _, err := os.Stat(pidPath(root)); !os.IsNotExist(err) {
+		t.Fatalf("legacy pidfile should be removed: %v", err)
+	}
+}
+
+func TestStartGatewayReadyTimeoutAndExitPaths(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(runDir(root), 0o755)
+	script := filepath.Join(root, "alive.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prevPath := selfPath
+	prevReady := healthReady
+	prevTimeout := startReadyTimeout
+	startReadyTimeout = 150 * time.Millisecond
+	selfPath = func() (string, error) { return script, nil }
+	healthReady = func(string, string) bool { return false }
+	t.Cleanup(func() {
+		selfPath = prevPath
+		healthReady = prevReady
+		startReadyTimeout = prevTimeout
+	})
+
+	pid, err := StartGateway(root, "127.0.0.1:1")
+	if err == nil || !strings.Contains(err.Error(), "healthz") {
+		t.Fatalf("timeout error = %v", err)
+	}
+	if _, statErr := os.Stat(pidPath(root)); statErr == nil {
+		t.Fatal("timeout must not leave pidfile")
+	}
+	proc, findErr := os.FindProcess(pid)
+	if findErr != nil {
+		t.Fatal(findErr)
+	}
+	if signalErr := proc.Signal(syscall.SIGKILL); signalErr != nil {
+		t.Fatal(signalErr)
+	}
+
+	healthReady = func(string, string) bool { return true }
+	readyPid, err := StartGateway(root, "127.0.0.1:1")
+	if err != nil {
+		t.Fatalf("ready path failed: %v", err)
+	}
+	identity, json, err := readPidIdentity(root)
+	if err != nil || !json || identity.Pid != readyPid || identity.Root != root {
+		t.Fatalf("ready pidfile identity = %+v json:%v err:%v", identity, json, err)
+	}
+	proc, _ = os.FindProcess(readyPid)
+	if err := proc.Signal(syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStartGatewayStillDetectsImmediateExit(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(runDir(root), 0o755)
+	failScript := filepath.Join(root, "fail.sh")
+	os.WriteFile(failScript, []byte("#!/bin/sh\necho 'listen tcp: bind: address already in use'\nexit 1\n"), 0o755)
+	prevPath := selfPath
+	prevReady := healthReady
+	prevTimeout := startReadyTimeout
+	startReadyTimeout = time.Second
+	selfPath = func() (string, error) { return failScript, nil }
+	healthReady = func(string, string) bool { return false }
+	t.Cleanup(func() {
+		selfPath = prevPath
+		healthReady = prevReady
+		startReadyTimeout = prevTimeout
+	})
+
+	_, err := StartGateway(root, "127.0.0.1:8787")
+	if err == nil || !strings.Contains(err.Error(), "address already in use") {
+		t.Fatalf("exit error = %v", err)
+	}
+	if _, statErr := os.Stat(pidPath(root)); statErr == nil {
+		t.Fatal("failed start must not leave pidfile")
 	}
 }
