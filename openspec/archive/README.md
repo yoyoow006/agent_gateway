@@ -8,3 +8,4 @@
 - `localize-client-parse-errors` — 客户端解析错误本地 400 且不污染供应商指标 — 严格
 - `project-token-save-rollback` — 项目 token 保存与工件创建失败回滚 — 严格
 - `atomic-local-config-writes` — local.toml 同目录临时文件与原子替换 — 标准
+- `gateway-process-identity-and-readiness` — 网关 PID 身份校验与 healthz 就绪判定 — 严格

@@ -47,3 +47,9 @@
 
 - 关键配置写盘必须使用同目录临时文件 → 写入 → fsync → close → chmod 0600 → rename，失败保留旧目标并清理 tmp。
 - 不要直接 `os.WriteFile` 覆盖 `config/local.toml`；该文件承载 admin/default/project token 与供应商池。
+
+## 网关进程身份与就绪
+
+- 后台 pidfile 必须写 JSON `{pid,start_time,exe,root}`，0600；stop 前严格匹配 `/proc/<pid>/stat` starttime 与 `/proc/<pid>/exe`。
+- 旧纯 PID pidfile 和身份不可读场景都必须 fail closed，绝不发 SIGTERM。
+- `agw start` 只有 `/__agw/healthz` 成功后才写 pidfile 并报成功；子进程退出优先判失败，超时不主动杀子进程。

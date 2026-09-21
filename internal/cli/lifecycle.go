@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -57,8 +60,103 @@ func pidAlive(pid int) bool {
 	return proc.Signal(syscall.Signal(0)) == nil
 }
 
+// pidIdentity 记录后台网关进程身份，避免 PID 复用误杀。
+type pidIdentity struct {
+	Pid       int    `json:"pid"`
+	StartTime int64  `json:"start_time"`
+	Exe       string `json:"exe"`
+	Root      string `json:"root"`
+}
+
+// readPidIdentity 读取 JSON 身份；legacy 表示旧版纯 PID 格式。
+func readPidIdentity(root string) (identity pidIdentity, isJSON bool, err error) {
+	data, err := os.ReadFile(pidPath(root))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return pidIdentity{}, false, nil
+		}
+		return pidIdentity{}, false, err
+	}
+	text := strings.TrimSpace(string(data))
+	if strings.HasPrefix(text, "{") {
+		if err := json.Unmarshal([]byte(text), &identity); err != nil {
+			return pidIdentity{}, false, err
+		}
+		return identity, identity.Pid > 0, nil
+	}
+	return pidIdentity{}, false, nil
+}
+
+// writePidIdentity 以 0600 写入 JSON 身份 pidfile。
+func writePidIdentity(root string, identity pidIdentity) error {
+	data, err := json.Marshal(identity)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(pidPath(root), data, 0o600)
+}
+
+// processIdentity 从 Linux /proc 读取进程启动时间与可执行路径。
+func processIdentity(pid int) (startTime int64, exe string, ok bool) {
+	if pid <= 0 {
+		return 0, "", false
+	}
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return 0, "", false
+	}
+	// comm 可能含空格/括号；从最后一次 ')' 后切分字段 3 开始。
+	text := string(data)
+	if idx := strings.LastIndex(text, ")"); idx < 0 {
+		return 0, "", false
+	} else {
+		text = text[idx+2:]
+	}
+	fields := strings.Fields(text)
+	// fields[0]=state(3), fields[19]=starttime(22).
+	if len(fields) < 20 {
+		return 0, "", false
+	}
+	startTime, err = strconv.ParseInt(fields[19], 10, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	exe, err = os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	if err != nil {
+		return 0, "", false
+	}
+	return startTime, exe, true
+}
+
+// sameGatewayProcess 校验 pidfile 身份是否仍属于同一网关进程。
+func sameGatewayProcess(identity pidIdentity) bool {
+	startTime, exe, ok := processIdentity(identity.Pid)
+	return ok && startTime == identity.StartTime && exe == identity.Exe
+}
+
+// gatewayRunning 表示存在身份匹配的运行中网关。
+func gatewayRunning(root string) bool {
+	identity, json, err := readPidIdentity(root)
+	return err == nil && json && sameGatewayProcess(identity)
+}
+
 // selfPath 可注入的可执行文件路径（测试替换）。
 var selfPath = func() (string, error) { return os.Executable() }
+
+var healthReady = func(root, listen string) bool {
+	host, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return false
+	}
+	resp, err := http.Get("http://" + net.JoinHostPort(host, port) + "/__agw/healthz")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
+var startReadyTimeout = 5 * time.Second
 
 // logTail 返回日志最后几行（错误提示用）。
 func logTail(root string, n int) string {
@@ -77,8 +175,9 @@ func logTail(root string, n int) string {
 // 通过 Wait 通道判定子进程是否站稳（僵尸进程对 signal-0 探测是存活的，
 // 不能用 pidAlive 判断启动成败——端口占用时子进程会秒退成僵尸）。
 func StartGateway(root string, cfgListen string) (int, error) {
-	if pidAlive(readPid(root)) {
-		return 0, fmt.Errorf("网关已在运行（pid %d）；如需重启先 agw stop", readPid(root))
+	if gatewayRunning(root) {
+		identity, _, _ := readPidIdentity(root)
+		return 0, fmt.Errorf("网关已在运行（pid %d）；如需重启先 agw stop", identity.Pid)
 	}
 	if err := os.MkdirAll(runDir(root), 0o755); err != nil {
 		return 0, err
@@ -102,21 +201,40 @@ func StartGateway(root string, cfgListen string) (int, error) {
 	pid := cmd.Process.Pid
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }() // 同时负责收尸，避免僵尸
-	if err := os.WriteFile(pidPath(root), []byte(strconv.Itoa(pid)), 0o600); err != nil {
-		return pid, err
-	}
-	// 观察窗口：启动失败（端口占用等）会在窗口内退出
-	select {
-	case <-waitCh:
-		os.Remove(pidPath(root))
-		tail := logTail(root, 3)
-		if tail != "" {
-			return pid, fmt.Errorf("网关启动失败：%s（完整日志 %s）", tail, logPath(root))
+
+	// healthz 成功前不写最终 pidfile；退出优先判定失败。
+	timeout := time.After(startReadyTimeout)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-waitCh:
+			os.Remove(pidPath(root))
+			return pid, startExitError(root)
+		case <-timeout:
+			return pid, fmt.Errorf("网关启动超时：healthz 在 %s 内未就绪（完整日志 %s）", startReadyTimeout, logPath(root))
+		case <-ticker.C:
+			if healthReady(root, cfgListen) {
+				startTime, exe, ok := processIdentity(pid)
+				if !ok {
+					os.Remove(pidPath(root))
+					return pid, fmt.Errorf("读取网关进程身份失败，不能安全记录 pidfile: %d", pid)
+				}
+				if err := writePidIdentity(root, pidIdentity{Pid: pid, StartTime: startTime, Exe: exe, Root: root}); err != nil {
+					return pid, err
+				}
+				return pid, nil
+			}
 		}
-		return pid, fmt.Errorf("网关启动后立即退出，请查看日志: %s", logPath(root))
-	case <-time.After(700 * time.Millisecond):
-		return pid, nil
 	}
+}
+
+func startExitError(root string) error {
+	tail := logTail(root, 3)
+	if tail != "" {
+		return fmt.Errorf("网关启动失败：%s（完整日志 %s）", tail, logPath(root))
+	}
+	return fmt.Errorf("网关启动后立即退出，请查看日志: %s", logPath(root))
 }
 
 func runStart(cmd *cobra.Command, args []string) {
@@ -129,26 +247,38 @@ func runStart(cmd *cobra.Command, args []string) {
 	fmt.Printf("网关已启动：pid=%d 监听=%s 日志=%s\n", pid, cfg.Gateway.Listen, logPath(root))
 }
 
-// StopGateway 发送 SIGTERM 并等待退出；超时返回错误。
+// StopGateway 校验进程身份后发送 SIGTERM；超时返回错误。
 func StopGateway(root string) error {
-	pid := readPid(root)
-	if !pidAlive(pid) {
-		os.Remove(pidPath(root))
+	identity, jsonFormat, err := readPidIdentity(root)
+	if err != nil {
+		return err
+	}
+	if !jsonFormat {
+		// 兼容发现旧格式，但绝不基于纯 PID 发送信号。
+		if readPid(root) > 0 {
+			_ = os.Remove(pidPath(root))
+			return fmt.Errorf("旧 pidfile 缺少进程身份，拒绝停止；请重启网关生成新 pidfile，或确认后删除 %s", pidPath(root))
+		}
+		_ = os.Remove(pidPath(root))
 		return fmt.Errorf("网关未在运行")
 	}
-	proc, _ := os.FindProcess(pid)
+	if !sameGatewayProcess(identity) {
+		_ = os.Remove(pidPath(root))
+		return fmt.Errorf("PID %d 身份不匹配，可能已被复用；已清理 pidfile，未发送信号", identity.Pid)
+	}
+	proc, _ := os.FindProcess(identity.Pid)
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
 		return fmt.Errorf("发送 SIGTERM 失败: %w", err)
 	}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		if !pidAlive(pid) {
+		if !pidAlive(identity.Pid) {
 			os.Remove(pidPath(root))
 			return nil
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	return fmt.Errorf("pid %d 在 15s 内未退出（可能在排空长流），可稍后重试或手动 kill", pid)
+	return fmt.Errorf("pid %d 在 15s 内未退出（可能在排空长流），可稍后重试或手动 kill", identity.Pid)
 }
 
 func runStop(cmd *cobra.Command, args []string) {
@@ -172,7 +302,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 	root := resolveRoot()
 	cfg := loadConfig(root)
 	pid := readPid(root)
-	info := StatusInfo{Pid: pid, Running: pidAlive(pid)}
+	info := StatusInfo{Pid: pid, Running: gatewayRunning(root)}
 	if info.Running {
 		if resp, err := adminRequest("GET", adminURL(cfg, "/__agw/metrics"), cfg); err == nil {
 			body, _ := io.ReadAll(resp.Body)

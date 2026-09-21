@@ -1,0 +1,30 @@
+# Tasks
+
+- [ ] 1. TDD 红阶段
+  - [x] 1.1 增加身份 pidfile 编解码测试：JSON 格式、0600、旧 PID 返回 legacy 标记。
+  - [x] 1.2 增加 `processIdentity` 测试：当前进程可读取 start-time/exe；不存在 PID 返回不可用。
+  - [x] 1.3 增加 Stop 身份不匹配测试：伪造 pidfile，不发送信号、清理 pidfile、返回错误。
+  - [x] 1.4 增加 Start ready / exited / timeout 测试：注入 health checker 与 selfPath，不依赖本地监听。
+  - [x] 1.5 运行 CLI 目标测试并记录红证据。
+- [ ] 2. 最小实现
+  - [x] 2.1 实现 `pidIdentity` JSON 结构与读取函数。
+  - [x] 2.2 实现 Linux `/proc/<pid>/stat` start-time 与 `/proc/<pid>/exe` 读取。
+  - [x] 2.3 实现 `gatewayProcessMatches`。
+  - [x] 2.4 `StartGateway` 使用注入 health checker 轮询，成功后写身份 pidfile。
+  - [x] 2.5 `StopGateway` / status / reload 运行判断使用身份校验；legacy 拒绝发信号。
+  - [x] 2.6 使用 `net.JoinHostPort` 构造 health URL。
+- [ ] 3. 验证
+  - [x] 3.1 运行 CLI 生命周期目标测试。
+  - [x] 3.2 运行 `go test ./internal/cli -run 'TestPid|TestGateway|TestStart|TestStop|TestReload' -count=1`。
+  - [x] 3.3 运行 `go build ./... && go vet ./... && gofmt -l .`。
+  - [x] 3.4 运行 `bash scripts/validate-workflow.sh --fast`。
+  - [x] 3.5 运行 `openspec validate gateway-process-identity-and-readiness --strict --no-interactive`。
+- [ ] 4. 严格审查
+  - [x] 4.1 Build 任务级审查信号安全不变量：身份不匹配绝不发信号。
+  - [x] 4.2 Verify 规格符合性独立审查。
+  - [x] 4.3 Verify 代码质量独立审查。
+  - [x] 4.4 处置全部 Critical/Important 并记录未验证范围/残余风险。
+- [ ] 5. 归档
+  - [x] 5.1 合并 delta 到主规格。
+  - [x] 5.2 更新 memory/kb 事实。
+  - [x] 5.3 状态置为已归档并运行归档门禁。

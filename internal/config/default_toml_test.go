@@ -149,3 +149,14 @@ func TestDocumentationRootFlagUsesSubcommandPosition(t *testing.T) {
 		t.Error("usage guide must show root flag after subcommand")
 	}
 }
+
+func TestDocumentationProcessIdentityAndReadiness(t *testing.T) {
+	readme := mustRead(t, "../../README.md")
+	usage := mustRead(t, "../../docs/usage-guide.md")
+	if !strings.Contains(readme, "healthz 就绪后写身份 pidfile") || !strings.Contains(readme, "身份匹配后优雅停止") {
+		t.Error("README lacks process identity and readiness semantics")
+	}
+	if !strings.Contains(usage, "healthz 就绪后写身份 pidfile") || !strings.Contains(usage, "校验 PID 身份") || !strings.Contains(usage, "旧纯 PID pidfile 拒绝发信号") {
+		t.Error("usage guide lacks process identity and readiness semantics")
+	}
+}
