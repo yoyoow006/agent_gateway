@@ -318,6 +318,8 @@ func TestLoadInvalidTOML(t *testing.T) {
 }
 
 func TestFindRoot(t *testing.T) {
+	// FindRoot reads AGW_ROOT; isolate the test from the developer's shell.
+	t.Setenv("AGW_ROOT", "")
 	root := writeRepo(t, map[string]string{"config/default.toml": ""})
 	sub := filepath.Join(root, "projects", "foo")
 	if got, err := FindRoot(sub); err != nil || got != root {
@@ -325,5 +327,20 @@ func TestFindRoot(t *testing.T) {
 	}
 	if _, err := FindRoot(t.TempDir()); err == nil {
 		t.Error("FindRoot outside repo should error")
+	}
+}
+
+func TestFindRootHonorsAGWRoot(t *testing.T) {
+	root := writeRepo(t, map[string]string{"config/default.toml": ""})
+	t.Setenv("AGW_ROOT", root)
+
+	if got, err := FindRoot(filepath.Join(root, "projects", "foo")); err != nil || got != root {
+		t.Errorf("FindRoot(sub) = %q,%v want %q", got, err, root)
+	}
+
+	invalid := t.TempDir()
+	t.Setenv("AGW_ROOT", invalid)
+	if _, err := FindRoot(root); err == nil {
+		t.Error("invalid AGW_ROOT should error")
 	}
 }
