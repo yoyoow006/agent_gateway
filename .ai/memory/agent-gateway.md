@@ -12,3 +12,7 @@
 - 项目 `providers` 列表只筛选候选子集；实际顺序按全局 `priority`，同优先级按名称，`preferred` 只在健康时置顶。
 - `connect_timeout_sec` / `first_byte_timeout_sec` 由按 provider 名称缓存的 HTTP client 持有，热重载不会重建，需重启网关。
 - failover 精确重试清单是 401、403、408、429、500、502、503、504、529；501/505 等非清单 5xx 原样回传。
+
+## Anthropic 版本头
+
+- 目标供应商为 Anthropic 且客户端未携带 `Anthropic-Version` 时，网关统一注入 `2023-06-01`；客户端已有值优先，不覆盖。

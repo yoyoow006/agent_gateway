@@ -13,6 +13,7 @@ import (
 
 	"agent_gateway/internal/config"
 	"agent_gateway/internal/protocol"
+	"agent_gateway/internal/protocol/anthropic"
 	"agent_gateway/internal/protocol/openairesponses"
 )
 
@@ -187,6 +188,9 @@ func (s *Server) attempt(r *http.Request, clientProto config.Protocol, profile *
 	upReq.Header.Del("Authorization")
 	upReq.Header.Del("X-Api-Key")
 	upReq.Header.Del("Accept-Encoding")
+	if p.Protocol == config.ProtocolAnthropic && upReq.Header.Get("Anthropic-Version") == "" {
+		upReq.Header.Set("Anthropic-Version", anthropic.APIVersion)
+	}
 	if extraHeader != nil {
 		for k, vs := range extraHeader {
 			for _, v := range vs {
