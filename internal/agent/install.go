@@ -88,6 +88,14 @@ func GenerateClaudeSettings(root, project, listen, token string) (string, error)
 	if err := os.WriteFile(path, out, 0o600); err != nil {
 		return "", err
 	}
+	// WriteFile 的 mode 只影响新文件；重写过宽的既有令牌文件时必须收紧。
+	if fi, err := os.Stat(path); err != nil {
+		return "", err
+	} else if fi.Mode().Perm() != 0o600 {
+		if err := os.Chmod(path, 0o600); err != nil {
+			return "", fmt.Errorf("收紧 %s 权限为 0600 失败: %w", path, err)
+		}
+	}
 	return path, nil
 }
 
