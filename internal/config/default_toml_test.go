@@ -136,3 +136,16 @@ func TestDocumentationLocalClientErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentationRootFlagUsesSubcommandPosition(t *testing.T) {
+	for _, path := range []string{"../../README.md", "../../docs/usage-guide.md"} {
+		text := mustRead(t, path)
+		if strings.Contains(text, "agw --root") {
+			t.Errorf("%s documents --root before subcommand, which cobra rejects", path)
+		}
+	}
+	usage := mustRead(t, "../../docs/usage-guide.md")
+	if !strings.Contains(usage, "agw <cmd> --root <dir>") || !strings.Contains(usage, "agw start --root /path/to/agent_gateway") {
+		t.Error("usage guide must show root flag after subcommand")
+	}
+}

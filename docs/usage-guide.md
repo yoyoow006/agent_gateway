@@ -62,7 +62,7 @@ agw 启动时**不**根据自身二进制位置（如 `/usr/local/bin/agw`、`~/
 
 | 优先级 | 方式 | 说明 |
 |---|---|---|
-| 1 | `agw --root <dir> <cmd>` 全局 flag | 直接使用 `<dir>`；目录里必须含 `config/` 子目录（否则启动失败并提示"不是有效网关仓库"） |
+| 1 | `agw <cmd> --root <dir>` 子命令 flag | 直接使用 `<dir>`；目录里必须含 `config/` 子目录（否则启动失败并提示"不是有效网关仓库"） |
 | 2 | 环境变量 `AGW_ROOT=<dir>` | 同上校验 `<dir>/config` 存在；适合在 shell rc 里 `export AGW_ROOT=/path/to/repo` 持久锁定 |
 | 3 | **当前工作目录 (cwd) 向上探测**（默认） | 从 cwd 开始逐级向上找 `config/default.toml` 或 `go.mod`；找到就用这个目录当仓库根；找到文件系统根还没找到就**报错退出**（不会"误读一个错的配置"） |
 
@@ -88,7 +88,7 @@ agw start     # 向上找到 <网关根>，pidfile/log 仍写在 <网关根>/.ru
 # 3. 从任意位置启动（显式指定）
 AGW_ROOT=/path/to/agent_gateway agw start
 # 或：
-agw --root /path/to/agent_gateway start
+agw start --root /path/to/agent_gateway
 ```
 
 **如何判断当前用的根**：

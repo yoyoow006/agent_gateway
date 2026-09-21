@@ -48,7 +48,7 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 
 agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）找配置——配置始终来自**网关仓库根**。根的发现按以下顺序：
 
-1. `agw --root <dir> <cmd>` 全局 flag（最高优先）
+1. `agw <cmd> --root <dir>` 子命令 flag（最高优先）
 2. 环境变量 `AGW_ROOT=<dir>`
 3. **当前工作目录向上探测** `config/default.toml` 或 `go.mod`（默认）
 
