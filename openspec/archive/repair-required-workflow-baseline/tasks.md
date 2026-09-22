@@ -24,10 +24,10 @@
 
 ## 3. Archive
 
-1. Resolve review findings without expanding scope.
-2. Merge the requirement into the workflow governance specification.
-3. Persist final manifest, findings, unverified scope, residual risk, and archive evidence.
-4. Run the archive gate selected by the repository validator.
+1. [x] Resolve review findings without expanding scope.
+2. [x] Merge the requirement into the workflow governance specification.
+3. [x] Persist final manifest, findings, unverified scope, residual risk, and archive evidence.
+4. [x] Run the archive gate selected by the repository validator.
 
 ## Local Integration Strategy
 
