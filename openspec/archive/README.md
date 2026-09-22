@@ -11,3 +11,4 @@
 - `gateway-process-identity-and-readiness` — 网关 PID 身份校验与 healthz 就绪判定 — 严格
 - `validate-listen-and-url-hosts` — 监听地址校验与 IPv6 URL Host 统一 — 标准
 - `provider-kv-and-config-permissions` — provider 键值校验与 local 配置最终权限验证 — 标准
+- `repair-required-workflow-baseline` — 修复 README 语义锚点与 installer 测试分类，恢复 required 门禁 — 严格

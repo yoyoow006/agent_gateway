@@ -117,6 +117,12 @@ def _core_external_commands(core_path: Path) -> tuple[str, ...]:
             f"core published an empty external command list:\n{result.stderr}"
         )
     return commands
+
+
+def _is_installer_capable_source() -> bool:
+    return (
+        REPOSITORY_ROOT / "scripts" / "lib" / "install_ai_workflow.py"
+    ).is_file() or (REPOSITORY_ROOT / "scripts/install-ai-workflow.sh").is_file()
 WORKFLOW_FIXTURE_FILES = (".gitignore", "AGENTS.md", "CLAUDE.md")
 WORKFLOW_FIXTURE_ERROR = "unsafe workflow fixture source"
 
@@ -410,10 +416,11 @@ class ValidateWorkflowContractTest(ContractFixtureTest):
         return "AGENTS.md" if self._canonical_assistant() == "codex" else "CLAUDE.md"
 
     def _assistants_for_portability_test(self) -> tuple[str, ...]:
-        installer = REPOSITORY_ROOT / "scripts/install-ai-workflow.sh"
-        if installer.is_file():
+        if _is_installer_capable_source():
             return ("codex", "claude")
-        return (self._canonical_assistant(),)
+        assistant = self._canonical_assistant()
+        self._select_only(assistant)
+        return (assistant,)
 
     def _install_selected_metadata(self, assistant: str) -> None:
         installer = REPOSITORY_ROOT / "scripts/install-ai-workflow.sh"
@@ -1502,6 +1509,26 @@ class WorkflowInstalledPortabilityRegressionTests:
 class WorkflowProfileTests(
     WorkflowInstalledPortabilityRegressionTests, ValidateWorkflowContractTest
 ):
+    def test_installer_capability_follows_authoritative_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            installed_root = Path(temporary)
+            source = inspect.getsource(_is_installer_capable_source)
+            self.assertIn('"install_ai_workflow.py"', source)
+            self.assertIn("install-ai-workflow.sh", source)
+            global REPOSITORY_ROOT
+            original_root = REPOSITORY_ROOT
+            self.addCleanup(globals().__setitem__, "REPOSITORY_ROOT", original_root)
+
+            capable_root = Path(temporary) / "source"
+            source_entry = capable_root / "scripts/install-ai-workflow.sh"
+            source_entry.parent.mkdir(parents=True)
+            source_entry.write_text("#!/bin/sh\n", encoding="utf-8")
+            REPOSITORY_ROOT = capable_root
+            self.assertTrue(_is_installer_capable_source())
+
+            REPOSITORY_ROOT = installed_root
+            self.assertFalse(_is_installer_capable_source())
+
     def test_other_assistant_installation_coverage_is_available(self) -> None:
         if not (REPOSITORY_ROOT / "scripts/install-ai-workflow.sh").is_file():
             self.skipTest(
