@@ -165,6 +165,8 @@ preferred = "relay"
 
 ## 开发
 
+本仓库同时携带风险分级 AI 工作流：标准模式使用三件套（`proposal.md`、delta `spec.md`、`tasks.md`），仅在跨模块取舍、新依赖、状态模型或重要替代方案无法在 proposal/tasks 中表达时增加 `design.md`；严格模式在确认规范后编写独立实现计划，且只有计划命中权限认证、资金账务、数据库 Schema/迁移、数据删除、破坏性动作、外部副作用或引入未确认选择等硬风险时，才要求第二次实施前确认。
+
 ```bash
 go build ./... && go vet ./... && go test -race ./...   # 全量验证
 gofmt -l .                                               # 应为空

@@ -62,7 +62,7 @@ def _is_installer_capable_source() -> bool:
 2. Change `_assistants_for_portability_test()`:
    - if the repository is installer-capable, return `("codex", "claude")`;
    - otherwise return `(self._canonical_assistant(),)`.
-3. Keep `_install_selected_metadata()` unchanged. In a repository without an installer, its existing profile assertion remains valid only for the explicit canonical installed-fixture regression that writes the profile.
+3. Keep `_install_selected_metadata()` unchanged. In a repository without an installer, `test_installed_fixture_without_installer_uses_canonical_profile` remains the explicit regression that writes the profile before invoking installed-metadata validation.
 4. Add a regression test under `WorkflowProfileTests` that inspects `_assistants_for_portability_test` and asserts:
    - installer-capable repositories request both assistants;
    - repositories without installer implementation or entrypoint use the canonical assistant only;

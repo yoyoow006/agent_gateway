@@ -2,25 +2,25 @@
 
 ## 1. Build
 
-1. Capture focused red test evidence on the current baseline for:
+1. [x] Capture focused red test evidence on the current baseline for:
    - semantic documentation anchor failure;
    - two installer selected-only metadata failures.
-2. Add the current workflow semantics to the README development/workflow section:
+2. [x] Add the current workflow semantics to the README development/workflow section:
    - standard suite: `proposal.md`, delta `spec.md`, `tasks.md`;
    - conditional `design.md` only for independent architectural decisions;
    - strict mode uses the confirmed suite plus an independent plan;
    - strict second implementation confirmation is triggered by the hard-risk set.
-3. Introduce an installer-capability predicate using the existing authoritative source marker (`scripts/lib/install_ai_workflow.py`) and/or the portable entrypoint.
-4. Limit `_assistants_for_portability_test()` coverage expansion to installer-capable repositories, while keeping canonical installed-fixture coverage explicit.
-5. Add a regression asserting that installer-only tests are not silently skipped merely because the installer entrypoint is missing.
+3. [x] Introduce an installer-capability predicate using the existing authoritative source marker (`scripts/lib/install_ai_workflow.py`) and/or the portable entrypoint.
+4. [x] Limit `_assistants_for_portability_test()` coverage expansion to installer-capable repositories, while keeping canonical installed-fixture coverage explicit.
+5. [x] Add a regression asserting that installer-only tests are not silently skipped merely because the installer entrypoint is missing.
 
 ## 2. Verify
 
-1. Run the three focused red tests and require 0 failures.
-2. Run `python3 -m unittest -v scripts.tests.test_validate_workflow` and require 0 failures.
-3. Run `bash scripts/validate-workflow.sh --require-openspec` and require `FAIL=0`.
-4. Run `git diff --check`.
-5. Confirm Herdr untracked artifacts remain untouched and this change remains a separate OpenSpec unit.
+1. [x] Run the three focused red tests and require 0 failures.
+2. [x] Run `python3 -m unittest -v scripts.tests.test_validate_workflow` and require 0 failures.
+3. [x] Run `bash scripts/validate-workflow.sh --require-openspec` and require `FAIL=0`.
+4. [x] Run `git diff --check`.
+5. [x] Confirm Herdr untracked artifacts remain untouched and this change remains a separate OpenSpec unit.
 
 ## 3. Archive
 
