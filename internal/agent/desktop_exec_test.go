@@ -38,6 +38,7 @@ func TestPrepareExecCodexDesktopUsesProjectAndIsolatedHome(t *testing.T) {
 	app := filepath.Join(t.TempDir(), "ChatGPT")
 	writeDesktopExecutable(t, app)
 	t.Setenv("AGW_CODEX_APP", app)
+	t.Setenv("AGW_API_KEY", "external-token")
 
 	env, dir, argv, err := PrepareExec(root, KindCodexDesktop, "foo", []string{"--flag"})
 	if err != nil {
@@ -47,8 +48,8 @@ func TestPrepareExecCodexDesktopUsesProjectAndIsolatedHome(t *testing.T) {
 	if env["CODEX_HOME"] != managed {
 		t.Fatalf("CODEX_HOME = %q, want %q", env["CODEX_HOME"], managed)
 	}
-	if _, ok := env["AGW_API_KEY"]; ok {
-		t.Fatal("desktop token must not enter process env")
+	if env["AGW_API_KEY"] != "agw-foo" {
+		t.Fatalf("desktop AGW_API_KEY = %q, want selected project token", env["AGW_API_KEY"])
 	}
 	if dir != filepath.Join(root, "projects", "foo") {
 		t.Fatalf("dir = %q", dir)
@@ -117,5 +118,25 @@ func TestPrepareResetDesktopHomeDoesNotResolveAppOrWriteToken(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "auth.json")); !os.IsNotExist(err) {
 		t.Fatalf("reset should not write auth: %v", err)
+	}
+}
+
+func TestAppendOverrideEnvPlacesOverridesLast(t *testing.T) {
+	base := []string{"PATH=/bin", "AGW_API_KEY=external-token"}
+	overrides := map[string]string{
+		"CODEX_HOME":  "/managed/codex-home",
+		"AGW_API_KEY": "agw-foo",
+	}
+	final := appendOverrideEnv(base, overrides)
+	parsed := make(map[string]string)
+	for _, entry := range final {
+		key, value, _ := strings.Cut(entry, "=")
+		parsed[key] = value
+	}
+	if parsed["AGW_API_KEY"] != "agw-foo" || parsed["CODEX_HOME"] != "/managed/codex-home" {
+		t.Fatalf("parsed env = %+v", parsed)
+	}
+	if got := final[len(final)-2:]; got[0] != "AGW_API_KEY=agw-foo" || got[1] != "CODEX_HOME=/managed/codex-home" {
+		t.Fatalf("override entries = %v", got)
 	}
 }

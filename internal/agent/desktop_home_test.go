@@ -32,6 +32,7 @@ func assertDesktopConfig(t *testing.T, path, token, wantBase string) {
 			Name    string `toml:"name"`
 			BaseURL string `toml:"base_url"`
 			WireAPI string `toml:"wire_api"`
+			EnvKey  string `toml:"env_key"`
 		} `toml:"model_providers"`
 	}
 	if _, err := toml.Decode(string(data), &cfg); err != nil {
@@ -41,8 +42,11 @@ func assertDesktopConfig(t *testing.T, path, token, wantBase string) {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 	p := cfg.ModelProviders["agw"]
-	if p.Name != "agw" || p.BaseURL != wantBase || p.WireAPI != "responses" {
+	if p.Name != "agw" || p.BaseURL != wantBase || p.WireAPI != "responses" || p.EnvKey != "AGW_API_KEY" {
 		t.Fatalf("provider = %+v", p)
+	}
+	if strings.Contains(string(data), token) {
+		t.Fatalf("config.toml leaks token %q", token)
 	}
 	authPath := filepath.Join(filepath.Dir(path), "auth.json")
 	authData, err := os.ReadFile(authPath)
