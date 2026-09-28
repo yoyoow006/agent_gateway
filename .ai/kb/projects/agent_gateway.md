@@ -3,8 +3,8 @@ project: agent_gateway
 kind: go-cli
 primary_domains: [llm-api-routing, protocol-translation, agent-launcher]
 related_domains: [gateway-cli, project-workspace, provider-failover]
-last_verified: 2026-09-20
-verified_commit: b35d30936777e83d53290c5c93ca9fc317a04a31
+last_verified: 2026-09-28
+verified_commit: 207047e8f4c7995ad9cdd6ff00996e236d02d8ce
 sources:
   - go.mod
   - cmd/agw/main.go
@@ -15,6 +15,8 @@ sources:
   - internal/protocol/codec.go
   - internal/provider/breaker.go
   - internal/agent/run.go
+  - internal/agent/desktop.go
+  - internal/agent/desktop_home.go
   - internal/workspace/project.go
   - README.md
   - docs/usage-guide.md
@@ -31,7 +33,7 @@ sources:
   - 在 Claude Code / Codex 与 Anthropic、OpenAI Chat、OpenAI Responses 供应商之间做同协议透传与跨协议翻译。
   - 在请求边界按供应商链执行 failover，并用被动熔断跳过连续失败供应商。
   - 把虚拟令牌解析为全局或项目档案，隔离不同业务项目的供应商子集、首选和模型映射。
-  - 生成 Claude / Codex 独立配置并以项目上下文启动 agent，不修改用户默认配置文件。
+  - 生成 Claude / Codex 独立配置并以项目上下文启动 agent；Linux 下可启动 Codex / ChatGPT 桌面应用并使用网关根内独立 Codex home，不修改用户默认配置文件。
 - 不负责：
   - TUI/Web 控制台、主动拨测、负载均衡、Windows 支持、计费统计和音视频多模态。
   - 代理 `GET /v1/responses/{id}` 单响应拉取；Codex 按无响应存储模式自包含上下文。
@@ -57,7 +59,7 @@ sources:
   - 安装/运行 Claude Code 与 Codex 依赖外部 npm 包和用户机器上的 Node.js 环境；本仓库不锁定这些外部 CLI 的版本。
 - 下游消费者：
   - Claude Code 经独立 `--settings` 文件指向 agw。
-  - Codex 经 `$CODEX_HOME/agw.config.toml` 的 `agw` profile 指向 agw。
+  - Codex CLI 经 `$CODEX_HOME/agw.config.toml` 的 `agw` profile 指向 agw；Linux 桌面模式经 `CODEX_HOME=<网关根>/.agw/codex-desktop` 与受管 `config.toml` / `auth.json` 指向 agw。
   - `projects/<名>/` 中创建的业务项目是运行时项目档案消费者；当前仓库未登记具体业务项目。
 - 共享契约：
   - 客户端端点：`POST /v1/messages`、`POST /v1/messages/count_tokens`、`POST|GET /v1/responses`、`POST /v1/chat/completions`、`GET /v1/models`。

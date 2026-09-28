@@ -12,3 +12,4 @@
 - `validate-listen-and-url-hosts` — 监听地址校验与 IPv6 URL Host 统一 — 标准
 - `provider-kv-and-config-permissions` — provider 键值校验与 local 配置最终权限验证 — 标准
 - `repair-required-workflow-baseline` — 修复 README 语义锚点与 installer 测试分类，恢复 required 门禁 — 严格
+- `adapt-codex-desktop` — Linux Codex/ChatGPT 桌面独立 home 启动与安全受管配置 — 严格

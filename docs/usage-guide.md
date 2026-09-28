@@ -30,6 +30,7 @@
 | Node.js + npm | ≥ 18 | `agw install` 安装 claude/codex（仅安装时需要） |
 | git | 任意近期版本 | 业务项目版本管理（可选） |
 | 操作系统 | Linux x64 优先 | Windows 为 v1 非目标 |
+| Codex / ChatGPT 桌面应用 | 可选，仅 Linux；自行安装 | 供 `agw run codex-desktop` 启动；agw 不安装、升级或打包桌面应用 |
 
 不需要 root；网关默认只监听 `127.0.0.1:8787`。
 
@@ -213,7 +214,7 @@ agw install codex     # npm i -g @openai/codex + 生成 $CODEX_HOME/agw.config.t
 
 **agw 不读取、不修改、不备份 `~/.claude/settings.json` 与 `~/.codex/config.toml`。**
 
-### 5.2 在项目里启动
+### 5.2 在项目里启动 agent CLI
 
 ```bash
 agw project new demo          # 创建 projects/demo（git init + agw.toml 模板 + 项目令牌）
@@ -222,12 +223,50 @@ agw run codex  --project demo # → codex -p agw（+ 环境变量 AGW_API_KEY=<d
 agw run codex  -- --model gpt-5.2   # `--` 之后的参数原样透传给 agent
 ```
 
+### 5.2.1 启动方式说明
+
 - 不带 `--project` 时按当前目录推断（cwd 在 `projects/<名>` 下即用该项目，否则全局档案）。
 - 进程以 exec 替换方式启动：Ctrl-C 直达 agent，无中间进程。
 - **Claude Code**：独立 settings 文件（0600，每次启动按当前项目令牌重写）作为叠加层——
   你自己的 `~/.claude/settings.json` 继续生效，仅 `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN` 两个 env 键被覆盖。
-- **Codex**：`-p agw` 使用独立 profile 文件 `$CODEX_HOME/agw.config.toml`（`CODEX_HOME` 环境变量优先），
+- **Codex CLI**：`-p agw` 使用独立 profile 文件 `$CODEX_HOME/agw.config.toml`（`CODEX_HOME` 环境变量优先），
   叠加在你的 `config.toml` 之上；裸跑 `codex`（不带 `-p`）不受任何影响。
+  `codex-desktop` 则使用网关根内独立 home，不复用这个 profile。
+
+### 5.3 Linux Codex / ChatGPT 桌面应用
+
+**安装前提**：`agw install` 只安装 Codex CLI，不安装桌面应用。请先自行安装 Linux 版 Codex / ChatGPT 桌面应用；标准 `.deb` 安装通常位于 `/usr/lib/chatgpt`。若安装位置不在默认 roots，或包结构不同，请用 `AGW_CODEX_APP` 显式指定应用目录或可执行文件。
+
+```bash
+agw run codex-desktop --project demo
+agw run codex-desktop --reset       # 仅重建 agw 管理的独立 home，不启动应用
+AGW_CODEX_APP=/path/to/ChatGPT agw run codex-desktop
+AGW_CODEX_APP=/path/to/custom-launcher agw run codex-desktop -- --safe-flag
+```
+
+启动前建议确认：
+
+```bash
+agw status                       # 网关已运行
+agw provider list                # 当前档案有启用供应商
+ls -l /usr/lib/chatgpt/ChatGPT   # 检查默认安装路径（示例）
+```
+
+- **安装边界**：`codex-desktop` 不是安装器。它不下载、升级、打包或注册桌面应用，也不修改 `.desktop` 文件或系统菜单。
+- **平台边界**：仅支持 Linux。默认只搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share`
+  与 `ChatGPT` / `chatgpt` / `Codex` / `codex` / `codex-beta` 应用目录及 `app` 子目录；
+  可执行文件名仅接受 `ChatGPT` / `chatgpt` / `Codex` / `codex`。macOS / Windows 不支持。
+  `AGW_CODEX_APP` 可显式指向应用目录或可执行文件。
+- **独立配置**：桌面子进程收到 `CODEX_HOME=<网关根>/.agw/codex-desktop`。agw 在该目录生成
+  `config.toml` 与只含 `OPENAI_API_KEY=<虚拟令牌>` 的 `auth.json`（目录 0700、文件 0600）。
+  用户默认 `~/.codex/config.toml` / `auth.json` 不读取、不修改、不备份。
+- **写入安全**：首次或内容变化前写入时间戳备份到 `.agw/codex-desktop/backups/`，再同目录原子替换；
+  任一文件失败会恢复原 config/auth pair。内容不变时不改 mtime、不新增备份。
+- **登录与会话**：独立 home 不迁移官方 OAuth、会话或插件状态；桌面应用可能显示全新环境。
+  模型请求按 agw 配置路由。已有桌面进程不会被 agw 检查、杀掉或重启。
+- **故障处理**：发现未识别内容或配置损坏时，普通启动会失败；确认无需保留后执行
+  `agw run codex-desktop --reset`。找不到应用时安装受支持的 Linux 桌面应用，或设置
+  `AGW_CODEX_APP`。
 
 ## 6. 业务项目工作区
 
@@ -304,6 +343,9 @@ agw status                               # 各供应商状态：closed/open/half
 | Codex 工具调用失败/丢工具 | Codex ≥0.149 跨协议工具编排已自动翻译（`additional_tools`/namespace/custom，见第 9 节）。若仍异常，检查目标供应商是否真支持对应工具；日志里若见"翻译降级 …"说明上游该字段无对应。 |
 | 日志里"翻译降级 cache_control …" | 正常：cache_control 跨协议丢弃，只影响缓存成本 |
 | 改了 .env 不生效 | `.env` 只在启动时加载：`agw stop && agw start` |
+| `codex-desktop` 找不到应用 | 先自行安装 Linux 桌面应用；再检查默认 roots，或设置 `AGW_CODEX_APP` 指向应用目录/可执行文件。agw 不代为安装应用 |
+| `codex-desktop` 是全新环境 | 独立 home 不迁移默认 `~/.codex` 的 OAuth/会话；这是零接触默认配置的预期行为 |
+| `codex-desktop` 提示未识别内容 | 运行 `agw run codex-desktop --reset`（只删除 `<根>/.agw/codex-desktop`） |
 | 改超时/协议/header 不生效 | 协议/header 等字段经 `agw provider add <同名>` 热重载后生效；`connect_timeout_sec` / `first_byte_timeout_sec` 因 HTTP client 复用需重启网关后生效。`.env` 里的密钥也只在 `agw start` 时加载一次，改完需 `agw stop && agw start` |
 
 ## 12. 卸载与回滚
@@ -311,7 +353,7 @@ agw status                               # 各供应商状态：closed/open/half
 ```bash
 agw stop                                  # 停网关
 rm -f "$CODEX_HOME/agw.config.toml"       # 删 codex 独立 profile（CODEX_HOME 缺省 ~/.codex）
-rm -rf <网关根>/.agw                      # 删 claude 独立 settings（含项目令牌）
+rm -rf <网关根>/.agw                      # 删 claude settings 与 Linux 桌面独立 home（含项目令牌/备份）
 npm rm -g @anthropic-ai/claude-code @openai/codex   # 如需连 agent 一起卸载
 ```
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -16,6 +17,8 @@ import (
 const (
 	KindClaude = "claude"
 	KindCodex  = "codex"
+	// KindCodexDesktop 是 Linux Codex/ChatGPT 桌面应用入口。
+	KindCodexDesktop = "codex-desktop"
 )
 
 // PrepareExec 解析项目与令牌，组装 exec 所需的 env/dir/argv。
@@ -61,8 +64,19 @@ func PrepareExec(root, kind, project string, extraArgs []string) (map[string]str
 		}
 		env["AGW_API_KEY"] = token
 		argv = append([]string{"codex", "-p", "agw"}, extraArgs...)
+	case KindCodexDesktop:
+		app, err := resolveCodexDesktopApp()
+		if err != nil {
+			return nil, "", nil, err
+		}
+		managedHome, err := EnsureDesktopHome(root, listen, token)
+		if err != nil {
+			return nil, "", nil, fmt.Errorf("准备 Codex 桌面独立配置失败: %w", err)
+		}
+		env["CODEX_HOME"] = managedHome
+		argv = append([]string{app}, extraArgs...)
 	default:
-		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex）", kind)
+		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex | codex-desktop）", kind)
 	}
 	return env, dir, argv, nil
 }
@@ -123,4 +137,19 @@ func Exec(env map[string]string, dir string, argv []string) error {
 		final = append(final, k+"="+env[k])
 	}
 	return syscall.Exec(path, argv, final)
+}
+
+// resolveCodexDesktopApp 从用户显式路径或 Linux 受限默认目录解析桌面应用。
+func resolveCodexDesktopApp() (string, error) {
+	home, _ := os.UserHomeDir()
+	return ResolveCodexDesktopApp(DesktopResolveOptions{
+		GOOS:     runtime.GOOS,
+		Home:     home,
+		Explicit: os.Getenv("AGW_CODEX_APP"),
+	})
+}
+
+// PrepareResetDesktop 仅重置 agw 管理的 Codex 桌面独立 home。
+func PrepareResetDesktop(root string) error {
+	return ResetDesktopHome(root)
 }
