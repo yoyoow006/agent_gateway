@@ -257,13 +257,16 @@ ls -l /usr/lib/chatgpt/ChatGPT   # 检查默认安装路径（示例）
   与 `ChatGPT` / `chatgpt` / `Codex` / `codex` / `codex-beta` 应用目录及 `app` 子目录；
   可执行文件名仅接受 `ChatGPT` / `chatgpt` / `Codex` / `codex`。macOS / Windows 不支持。
   `AGW_CODEX_APP` 可显式指向应用目录或可执行文件。
-- **独立配置**：桌面子进程收到 `CODEX_HOME=<网关根>/.agw/codex-desktop`。agw 在该目录生成
-  `config.toml` 与只含 `OPENAI_API_KEY=<虚拟令牌>` 的 `auth.json`（目录 0700、文件 0600）。
+- **独立配置**：桌面子进程收到 `CODEX_HOME=<网关根>/.agw/codex-desktop` 与
+  `AGW_API_KEY=<当前档案虚拟令牌>`。agw 在该目录生成 `config.toml` 与只含
+  `OPENAI_API_KEY=<虚拟令牌>` 的 `auth.json`（目录 0700、文件 0600）；
+  `config.toml` 通过 `env_key = "AGW_API_KEY"` 引用认证变量，本身不含密钥。
   用户默认 `~/.codex/config.toml` / `auth.json` 不读取、不修改、不备份。
 - **写入安全**：首次或内容变化前写入时间戳备份到 `.agw/codex-desktop/backups/`，再同目录原子替换；
   任一文件失败会恢复原 config/auth pair。内容不变时不改 mtime、不新增备份。
 - **登录与会话**：独立 home 不迁移官方 OAuth、会话或插件状态；桌面应用可能显示全新环境。
-  模型请求按 agw 配置路由。已有桌面进程不会被 agw 检查、杀掉或重启。
+  模型请求与标题生成等内置结构化请求均按 agw 配置路由，并使用子进程 `AGW_API_KEY` 认证；
+  `auth.json` 仅保留 `OPENAI_API_KEY` 登录态语义。已有桌面进程不会被 agw 检查、杀掉或重启。
 - **故障处理**：发现未识别内容或配置损坏时，普通启动会失败；确认无需保留后执行
   `agw run codex-desktop --reset`。找不到应用时安装受支持的 Linux 桌面应用，或设置
   `AGW_CODEX_APP`。
@@ -344,7 +347,7 @@ agw status                               # 各供应商状态：closed/open/half
 | 日志里"翻译降级 cache_control …" | 正常：cache_control 跨协议丢弃，只影响缓存成本 |
 | 改了 .env 不生效 | `.env` 只在启动时加载：`agw stop && agw start` |
 | `codex-desktop` 找不到应用 | 先自行安装 Linux 桌面应用；再检查默认 roots，或设置 `AGW_CODEX_APP` 指向应用目录/可执行文件。agw 不代为安装应用 |
-| `codex-desktop` 是全新环境 | 独立 home 不迁移默认 `~/.codex` 的 OAuth/会话；这是零接触默认配置的预期行为 |
+| `codex-desktop` 是全新环境 | 独立 home 不迁移默认 `~/.codex` 的 OAuth/会话；这是零接触默认配置的预期行为。切换档案或令牌后，先退出已有桌面进程，再运行 `agw run codex-desktop` 让子进程取得当前 `AGW_API_KEY` |
 | `codex-desktop` 提示未识别内容 | 运行 `agw run codex-desktop --reset`（只删除 `<根>/.agw/codex-desktop`） |
 | 改超时/协议/header 不生效 | 协议/header 等字段经 `agw provider add <同名>` 热重载后生效；`connect_timeout_sec` / `first_byte_timeout_sec` 因 HTTP client 复用需重启网关后生效。`.env` 里的密钥也只在 `agw start` 时加载一次，改完需 `agw stop && agw start` |
 

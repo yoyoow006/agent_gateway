@@ -22,6 +22,7 @@ disable_response_storage = true
 name = "agw"
 base_url = %q
 wire_api = "responses"
+env_key = "AGW_API_KEY"
 `
 
 type desktopWritePlan struct {

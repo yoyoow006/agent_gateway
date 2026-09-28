@@ -86,9 +86,9 @@ agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）�
 | `[gateway] default_token` | 全局供应商池 |
 | `[projects.<名>] token` | 该项目覆盖（供应商子集/粘性/模型映射） |
 
-`agw run claude --project X` 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`；`agw run codex` 注入 `AGW_API_KEY`。不传项目时按 cwd 推断。
+`agw run claude --project X` 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`；`agw run codex` 注入 `AGW_API_KEY`。`agw run codex-desktop` 同样给子进程注入当前档案的 `AGW_API_KEY`。不传项目时按 cwd 推断。
 
-**Linux Codex / ChatGPT 桌面应用**：`agw run codex-desktop` 不负责安装或升级桌面应用；请先安装受支持的 Linux 桌面应用，或用 `AGW_CODEX_APP` 指向应用目录/可执行文件。启动后使用 `<网关根>/.agw/codex-desktop` 作为子进程 `CODEX_HOME`，只写 agw 管理的独立 `config.toml` / `auth.json`（0600），完全不读取、不修改用户默认 `~/.codex`。自动发现仅搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 与 `ChatGPT/chatgpt/Codex/codex/codex-beta` 应用目录。macOS / Windows 桌面应用不支持。
+**Linux Codex / ChatGPT 桌面应用**：`agw run codex-desktop` 不负责安装或升级桌面应用；请先安装受支持的 Linux 桌面应用，或用 `AGW_CODEX_APP` 指向应用目录/可执行文件。启动后使用 `<网关根>/.agw/codex-desktop` 作为子进程 `CODEX_HOME`，并注入当前档案的 `AGW_API_KEY`；只写 agw 管理的独立 `config.toml` / `auth.json`（0600）。`config.toml` 通过 `env_key = "AGW_API_KEY"` 引用该变量且不含密钥，完全不读取、不修改用户默认 `~/.codex`。自动发现仅搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 与 `ChatGPT/chatgpt/Codex/codex/codex-beta` 应用目录。macOS / Windows 桌面应用不支持。
 
 ## 配置参考
 
@@ -142,7 +142,7 @@ preferred = "relay"
 | `agw switch <名>` | 粘性首选 |
 | `agw reload` | 不写盘地触发网关热重载（手动编辑 `config/local.toml` 后使用；网关未运行时退出 0） |
 | `agw install claude\|codex` | npm 安装 + 生成独立配置（零接触用户默认文件） |
-| `agw run codex-desktop` | Linux Codex / ChatGPT 桌面启动入口；不安装应用，使用 `<根>/.agw/codex-desktop` 独立 home |
+| `agw run codex-desktop` | Linux Codex / ChatGPT 桌面启动入口；不安装应用，使用 `<根>/.agw/codex-desktop` 独立 home 并注入 `AGW_API_KEY` |
 | `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile |
 | `agw project new/list` | 业务项目工作区（独立 git 仓库） |
 

@@ -74,6 +74,7 @@ func PrepareExec(root, kind, project string, extraArgs []string) (map[string]str
 			return nil, "", nil, fmt.Errorf("准备 Codex 桌面独立配置失败: %w", err)
 		}
 		env["CODEX_HOME"] = managedHome
+		env["AGW_API_KEY"] = token
 		argv = append([]string{app}, extraArgs...)
 	default:
 		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex | codex-desktop）", kind)
@@ -126,17 +127,23 @@ func Exec(env map[string]string, dir string, argv []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("进入项目目录 %s 失败: %w", dir, err)
 	}
-	// 覆盖式合并环境变量（同名键追加在尾部，由 exec 后的运行时取最后值）
-	final := os.Environ()
-	keys := make([]string, 0, len(env))
-	for k := range env {
-		keys = append(keys, k)
+	final := appendOverrideEnv(os.Environ(), env)
+	return syscall.Exec(path, argv, final)
+}
+
+// appendOverrideEnv 把覆盖键排序后追加到基础环境尾部；exec 后的运行时取最后值。
+func appendOverrideEnv(base []string, overrides map[string]string) []string {
+	final := make([]string, 0, len(base)+len(overrides))
+	final = append(final, base...)
+	keys := make([]string, 0, len(overrides))
+	for key := range overrides {
+		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	for _, k := range keys {
-		final = append(final, k+"="+env[k])
+	for _, key := range keys {
+		final = append(final, key+"="+overrides[key])
 	}
-	return syscall.Exec(path, argv, final)
+	return final
 }
 
 // resolveCodexDesktopApp 从用户显式路径或 Linux 受限默认目录解析桌面应用。

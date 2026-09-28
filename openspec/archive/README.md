@@ -13,3 +13,4 @@
 - `provider-kv-and-config-permissions` — provider 键值校验与 local 配置最终权限验证 — 标准
 - `repair-required-workflow-baseline` — 修复 README 语义锚点与 installer 测试分类，恢复 required 门禁 — 严格
 - `adapt-codex-desktop` — Linux Codex/ChatGPT 桌面独立 home 启动与安全受管配置 — 严格
+- `fix-codex-desktop-provider-env` — Codex Desktop provider 环境变量认证与选定令牌注入 — 严格

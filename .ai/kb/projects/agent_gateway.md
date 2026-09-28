@@ -59,7 +59,7 @@ sources:
   - 安装/运行 Claude Code 与 Codex 依赖外部 npm 包和用户机器上的 Node.js 环境；本仓库不锁定这些外部 CLI 的版本。
 - 下游消费者：
   - Claude Code 经独立 `--settings` 文件指向 agw。
-  - Codex CLI 经 `$CODEX_HOME/agw.config.toml` 的 `agw` profile 指向 agw；Linux 桌面模式经 `CODEX_HOME=<网关根>/.agw/codex-desktop` 与受管 `config.toml` / `auth.json` 指向 agw。
+  - Codex CLI 经 `$CODEX_HOME/agw.config.toml` 的 `agw` profile 指向 agw；Linux 桌面模式经 `CODEX_HOME=<网关根>/.agw/codex-desktop`、子进程 `AGW_API_KEY=<当前档案虚拟令牌>` 与受管 `config.toml` / `auth.json` 指向 agw；provider 通过 `env_key` 读取变量，`config.toml` 不含密钥。
   - `projects/<名>/` 中创建的业务项目是运行时项目档案消费者；当前仓库未登记具体业务项目。
 - 共享契约：
   - 客户端端点：`POST /v1/messages`、`POST /v1/messages/count_tokens`、`POST|GET /v1/responses`、`POST /v1/chat/completions`、`GET /v1/models`。
