@@ -19,7 +19,7 @@
 1. [x] Run `GOCACHE=/tmp/agw-gocache go test ./... -race`; sandbox local-listen restrictions caused `internal/cli` and `internal/gateway` httptest panics. `GOCACHE=/tmp/agw-gocache go test ./cmd/... ./internal/agent/... ./internal/config/... ./internal/protocol/... ./internal/provider/... ./internal/workspace/... -race` passed, and non-race `go test ./...` reproduced the same two pre-existing sandbox-only listen failures.
 2. [x] Run `go vet ./...`, `gofmt` on changed Go files, `openspec validate fix-codex-desktop-provider-env --strict --no-interactive`, and `git diff --check`.
 3. [x] Freeze the strict authentication invariant with `.ai/tools/review_manifest.py freeze`, perform task-level review, and resolve every Critical/Important finding (manifest `3ad16082e6896e6d3dc868d600d8c480635b278d241ab9c596b7b2cb476d5989`; no Critical/Important finding).
-4. [ ] Perform two independent Verify reviews with fresh manifests for specification conformance and code quality.
+4. [x] Perform two independent Verify reviews with fresh manifests for specification conformance and code quality (manifest `1682c7a9ad5341df325501b26a50fb140e8ea8a45991d10db18a07943849957b`; both PASS).
 5. [ ] Run one local desktop smoke launch through `agw run codex-desktop`, then create a thread and verify the gateway receives an authorized structured title request; do not print the token.
 
 ## 4. Archive
