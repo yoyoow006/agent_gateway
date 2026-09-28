@@ -27,13 +27,13 @@
 
 ## 5. Verify
 
-1. [ ] Run full regression: `go test ./... -race` (if sandbox networking constraints block it, run `go test ./...` plus available narrow race tests and record the exact limitation).
-2. [ ] Run `go vet ./...`, format changed Go files with `gofmt`, and run `git diff --check`.
-3. [ ] Run `openspec validate adapt-codex-desktop --strict --no-interactive`.
-4. [ ] Inspect the complete diff and confirm no CodexPlusPlus code or third-party assets are copied.
-5. [ ] Perform strict task-level review for the isolated authentication-home mutation and guarded reset unit using a shared review manifest; resolve all Critical/Important findings.
+1. [x] Run full regression: `go test ./... -race` (if sandbox networking constraints block it, run `go test ./...` plus available narrow race tests and record the exact limitation).
+2. [x] Run `go vet ./...`, format changed Go files with `gofmt`, and run `git diff --check`.
+3. [x] Run `openspec validate adapt-codex-desktop --strict --no-interactive`.
+4. [x] Inspect the complete diff and confirm no CodexPlusPlus code or third-party assets are copied.
+5. [x] Perform strict task-level review for the isolated authentication-home mutation and guarded reset unit using a shared review manifest; resolve all Critical/Important findings.
 6. [ ] Run two independent Verify reviews for specification conformance and code quality using fresh manifests.
-7. [ ] If a supported Linux desktop application is installed on the host, perform one manual launch smoke test without exposing the token; otherwise record the desktop launch environment as NOT_RUN and retain automated fake-app evidence.
+7. [x] If a supported Linux desktop application is installed on the host, perform one manual launch smoke test without exposing the token; otherwise record the desktop launch environment as NOT_RUN and retain automated fake-app evidence.
 
 ## 6. Archive
 
