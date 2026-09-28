@@ -14,9 +14,9 @@
 
 ## 3. Build: isolated managed Codex home writer
 
-1. [ ] Add failing tests for config/auth content, IPv4 and IPv6 gateway URLs, permissions, no-op mtime preservation, timestamped backup, atomic write failure rollback, invalid managed content rejection, symlink escape rejection, and reset path safety.
-2. [ ] Implement `<root>/.agw/codex-desktop` path validation, managed TOML/JSON generation, same-directory atomic replacement, backup lifecycle, rollback, and guarded reset.
-3. [ ] Run `go test ./internal/agent -run 'Test.*Desktop.*(Config|Auth|Atomic|Reset|Home)' -count=1` and confirm all cases pass.
+1. [x] Add failing tests for config/auth content, IPv4 and IPv6 gateway URLs, permissions, no-op mtime preservation, timestamped backup, atomic write failure rollback, invalid managed content rejection, symlink escape rejection, and reset path safety.
+2. [x] Implement `<root>/.agw/codex-desktop` path validation, managed TOML/JSON generation, same-directory atomic replacement, backup lifecycle, rollback, and guarded reset.
+3. [x] Run `GOCACHE=/tmp/agw-gocache go test ./internal/agent -run 'Test.*(DesktopHome|DesktopConfig|DesktopAuth|DesktopAtomic|DesktopReset)' -count=1` and confirm all cases pass.
 
 ## 4. Build: CLI integration and docs
 
