@@ -40,6 +40,7 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 ./agw project new demo
 ./agw run claude --project demo
 ./agw run codex --project demo -- --model gpt-5.2
+./agw run codex-desktop --project demo   # Linux 桌面应用（独立 CODEX_HOME）
 ```
 
 从这一刻起：Claude Code 与 Codex 的所有请求都经过 agw。任何一家供应商限流（429）、过载（529）、超时或宕机，网关在**下一个请求**自动切到健康供应商——agent 与正在运行的任务完全无感。
@@ -85,6 +86,8 @@ agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）�
 | `[projects.<名>] token` | 该项目覆盖（供应商子集/粘性/模型映射） |
 
 `agw run claude --project X` 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`；`agw run codex` 注入 `AGW_API_KEY`。不传项目时按 cwd 推断。
+
+**Linux Codex / ChatGPT 桌面应用**：`agw run codex-desktop` 使用 `<网关根>/.agw/codex-desktop` 作为子进程 `CODEX_HOME`，只写 agw 管理的独立 `config.toml` / `auth.json`（0600），完全不读取、不修改用户默认 `~/.codex`。自动发现仅搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 与 `ChatGPT/chatgpt/Codex/codex/codex-beta` 应用目录；也可用 `AGW_CODEX_APP` 显式指定应用目录或可执行文件。macOS / Windows 桌面应用不支持。
 
 ## 配置参考
 
@@ -162,6 +165,7 @@ preferred = "relay"
 
 - `agw run claude` → `claude --settings <根>/.agw/claude-settings.<项目|global>.json`（0600，每次启动按当前项目令牌重写；你自己的 settings 继续生效，仅同名 env 键被覆盖）。
 - `agw run codex` → `codex -p agw`（`$CODEX_HOME/agw.config.toml`，尊重 `CODEX_HOME` 环境变量；密钥经 `AGW_API_KEY` 注入，profile 文件不含密钥）。
+- `agw run codex-desktop`（仅 Linux）→ 启动 Codex / ChatGPT 桌面应用，并给子进程设置 `CODEX_HOME=<根>/.agw/codex-desktop`。独立 home 中 `auth.json` 仅含 agw 虚拟令牌，不迁移官方 OAuth；应用可能表现为全新环境。已有桌面进程不会被 agw 检查或终止。
 
 ## 开发
 
