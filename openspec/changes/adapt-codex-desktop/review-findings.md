@@ -49,3 +49,14 @@
   - `Q5` Minor: redundant TOML wrapper. Fixed.
 - Delta manifest: `3d3933c74db9fc136acd75d6abb5c4a922f12a9768cc4ff7c8cb0f4c158fb567`
 - Delta result: PASS; all Important findings resolved, no open Critical/Important findings.
+
+## Post-Verify documentation refinement
+
+- User requested stronger installation/usage documentation before archive.
+- Updated `README.md` and `docs/usage-guide.md` to state:
+  - `agw install` installs Codex CLI only; `codex-desktop` is not an installer or upgrader.
+  - The Linux desktop app must be installed separately; standard deb layout is commonly `/usr/lib/chatgpt`.
+  - Pre-launch checks for gateway, provider profile, and desktop executable.
+  - Explicit launcher/file override and argument passthrough examples.
+  - Command table and FAQ now distinguish Codex CLI from Codex desktop.
+- Verification: documentation keyword/section inspection and `git diff --check` PASS.

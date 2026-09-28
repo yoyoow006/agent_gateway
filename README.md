@@ -15,7 +15,7 @@ Codex ──config.toml base_url──────►┤  ├─ 令牌→项目
 
 ## 快速开始
 
-前置：Go ≥1.24.11（构建）、Node.js ≥18 + npm（安装 agent）、git。完整的编译安装与使用说明见 [docs/usage-guide.md](docs/usage-guide.md)。
+前置：Go ≥1.24.11（构建）、Node.js ≥18 + npm（安装 agent）、git。Linux 上如需 `codex-desktop`，另需自行安装 Codex / ChatGPT 桌面应用。完整的编译安装与使用说明见 [docs/usage-guide.md](docs/usage-guide.md)。
 
 ```bash
 # 1. 构建
@@ -35,6 +35,7 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 # 4. 一键安装 agent（npm 安装 + 生成独立配置；不碰你的 ~/.claude 与 ~/.codex 默认文件）
 ./agw install claude
 ./agw install codex
+# Linux 桌面应用不由 agw 安装；请先自行安装 Codex / ChatGPT 桌面应用，再用 run codex-desktop
 
 # 5. 在项目里启动 agent（项目令牌自动注入，exec 替换进程）
 ./agw project new demo
@@ -87,7 +88,7 @@ agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）�
 
 `agw run claude --project X` 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`；`agw run codex` 注入 `AGW_API_KEY`。不传项目时按 cwd 推断。
 
-**Linux Codex / ChatGPT 桌面应用**：`agw run codex-desktop` 使用 `<网关根>/.agw/codex-desktop` 作为子进程 `CODEX_HOME`，只写 agw 管理的独立 `config.toml` / `auth.json`（0600），完全不读取、不修改用户默认 `~/.codex`。自动发现仅搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 与 `ChatGPT/chatgpt/Codex/codex/codex-beta` 应用目录；也可用 `AGW_CODEX_APP` 显式指定应用目录或可执行文件。macOS / Windows 桌面应用不支持。
+**Linux Codex / ChatGPT 桌面应用**：`agw run codex-desktop` 不负责安装或升级桌面应用；请先安装受支持的 Linux 桌面应用，或用 `AGW_CODEX_APP` 指向应用目录/可执行文件。启动后使用 `<网关根>/.agw/codex-desktop` 作为子进程 `CODEX_HOME`，只写 agw 管理的独立 `config.toml` / `auth.json`（0600），完全不读取、不修改用户默认 `~/.codex`。自动发现仅搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 与 `ChatGPT/chatgpt/Codex/codex/codex-beta` 应用目录。macOS / Windows 桌面应用不支持。
 
 ## 配置参考
 
@@ -141,6 +142,7 @@ preferred = "relay"
 | `agw switch <名>` | 粘性首选 |
 | `agw reload` | 不写盘地触发网关热重载（手动编辑 `config/local.toml` 后使用；网关未运行时退出 0） |
 | `agw install claude\|codex` | npm 安装 + 生成独立配置（零接触用户默认文件） |
+| `agw run codex-desktop` | Linux Codex / ChatGPT 桌面启动入口；不安装应用，使用 `<根>/.agw/codex-desktop` 独立 home |
 | `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile |
 | `agw project new/list` | 业务项目工作区（独立 git 仓库） |
 
