@@ -20,10 +20,10 @@
 
 ## 4. Build: CLI integration and docs
 
-1. [ ] Add failing agent/CLI tests proving `codex-desktop` is distinct from `codex`, infers project profile, sets only the child `CODEX_HOME`, resolves the app before writes, supports `--reset`, and preserves existing CLI zero-touch assertions.
-2. [ ] Implement `KindCodexDesktop`, preparation API, CLI acceptance and flags, executable launch/delegation behavior, and actionable Linux-only errors.
+1. [x] Add failing agent/CLI tests proving `codex-desktop` is distinct from `codex`, infers project profile, sets only the child `CODEX_HOME`, resolves the app before writes, supports `--reset`, and preserves existing CLI zero-touch assertions.
+2. [x] Implement `KindCodexDesktop`, preparation API, CLI acceptance and flags, executable launch/delegation behavior, and actionable Linux-only errors.
 3. [ ] Update `README.md` and `docs/usage-guide.md` with prerequisites, isolated home semantics, login/token tradeoff, reset/uninstall behavior, platform limitation, and troubleshooting.
-4. [ ] Run `go test ./internal/agent ./internal/cli -count=1`.
+4. [x] Run `GOCACHE=/tmp/agw-gocache go test ./internal/agent -count=1` and targeted CLI tests; full CLI suite is blocked by the pre-existing sandbox local-listen restriction recorded in baseline evidence.
 
 ## 5. Verify
 

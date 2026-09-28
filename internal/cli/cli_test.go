@@ -698,3 +698,81 @@ func TestProviderAddAcceptsValidKV(t *testing.T) {
 		t.Fatalf("valid key/values not saved: model=%v headers=%v", p.ModelMap, p.Headers)
 	}
 }
+
+func TestRunCodexDesktopUsesIsolatedHome(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		"config/local.toml":   "[gateway]\ndefault_token = \"agw-g\"\n",
+		"projects/demo/.keep": "",
+	})
+	app := filepath.Join(t.TempDir(), "ChatGPT")
+	os.MkdirAll(filepath.Dir(app), 0o755)
+	os.WriteFile(app, []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	t.Setenv("AGW_CODEX_APP", app)
+	t.Setenv("HOME", t.TempDir())
+
+	var captured struct {
+		called bool
+		env    map[string]string
+		dir    string
+		argv   []string
+	}
+	prev := execAgent
+	execAgent = func(env map[string]string, dir string, argv []string) error {
+		captured.called, captured.env, captured.dir, captured.argv = true, env, dir, argv
+		return nil
+	}
+	defer func() { execAgent = prev }()
+
+	cmd := NewRootCmd()
+	cmd.SetArgs([]string{"run", "--root", root, "codex-desktop", "--project", "demo", "--", "--safe"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !captured.called || captured.argv[0] != app || captured.argv[len(captured.argv)-1] != "--safe" {
+		t.Fatalf("captured = %+v", captured)
+	}
+	if captured.env["CODEX_HOME"] != filepath.Join(root, ".agw", "codex-desktop") {
+		t.Fatalf("CODEX_HOME = %q", captured.env["CODEX_HOME"])
+	}
+}
+
+func TestRunCodexDesktopResetDoesNotExecApp(t *testing.T) {
+	root := writeRepo(t, map[string]string{"config/local.toml": "[gateway]\ndefault_token = \"agw-g\"\n"})
+	t.Setenv("AGW_CODEX_APP", "/missing/Codex")
+	called := false
+	prev := execAgent
+	execAgent = func(map[string]string, string, []string) error { called = true; return nil }
+	defer func() { execAgent = prev }()
+
+	cmd := NewRootCmd()
+	cmd.SetArgs([]string{"run", "--root", root, "codex-desktop", "--reset"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Fatal("reset must not launch desktop")
+	}
+	entries, err := os.ReadDir(filepath.Join(root, ".agw", "codex-desktop"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("reset entries = %v (%v)", entries, err)
+	}
+}
+
+func TestRunRejectsResetOutsideCodexDesktop(t *testing.T) {
+	run, _, err := NewRootCmd().Find([]string{"run"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run.ParseFlags(nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := run.Flags().Lookup("reset"); got == nil || got.Usage == "" {
+		t.Fatalf("reset flag missing or undocumented: %+v", got)
+	}
+	if err := resetOnlyCodexDesktop("codex"); err == nil {
+		t.Fatal("codex --reset should fail")
+	}
+	if err := resetOnlyCodexDesktop("codex-desktop"); err != nil {
+		t.Fatalf("codex-desktop reset kind should validate: %v", err)
+	}
+}

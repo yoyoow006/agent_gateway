@@ -18,7 +18,7 @@ var (
 		Run:   runInstall,
 	}
 	runCmd = &cobra.Command{
-		Use:   "run <claude|codex> [--project 名] [-- agent 参数...]",
+		Use:   "run <claude|codex|codex-desktop> [--project 名] [-- agent 参数...]",
 		Short: "在项目上下文中启动 agent（注入项目令牌，exec 替换进程）",
 		// `--` 之后的参数会被并入 positional args，不能再用 ExactArgs(1)
 		Args: cobra.MinimumNArgs(1),
@@ -29,14 +29,15 @@ var (
 func init() {
 	addRootFlag(installCmd)
 	addRootFlag(runCmd)
+	runCmd.Flags().Bool("reset", false, "仅 codex-desktop：重置 agw 管理的独立 home 后退出")
 	runCmd.Flags().StringP("project", "p", "", "项目名（缺省按 cwd 推断，不在 projects/ 下则用全局档案）")
 	rootCommands = append(rootCommands, installCmd, runCmd)
 }
 
 func runInstall(cmd *cobra.Command, args []string) {
 	kind := args[0]
-	if kind != agent.KindClaude && kind != agent.KindCodex {
-		fatalf("未知 agent: %s（claude | codex）", kind)
+	if kind != agent.KindClaude && kind != agent.KindCodex && kind != agent.KindCodexDesktop {
+		fatalf("未知 agent: %s（claude | codex | codex-desktop）", kind)
 	}
 	root := resolveRoot()
 	cfg := loadConfig(root)
@@ -60,12 +61,27 @@ var execAgent = agent.Exec
 
 func runAgent(cmd *cobra.Command, args []string) {
 	kind := args[0]
-	if kind != agent.KindClaude && kind != agent.KindCodex {
-		fatalf("未知 agent: %s（claude | codex）", kind)
+	if kind != agent.KindClaude && kind != agent.KindCodex && kind != agent.KindCodexDesktop {
+		fatalf("未知 agent: %s（claude | codex | codex-desktop）", kind)
 	}
 	root := resolveRoot()
 	project, _ := cmd.Flags().GetString("project")
+	reset, _ := cmd.Flags().GetBool("reset")
+	if reset {
+		if err := resetOnlyCodexDesktop(kind); err != nil {
+			fatalf("%v", err)
+		}
+		if err := agent.PrepareResetDesktop(root); err != nil {
+			fatalf("%v", err)
+		}
+		return
+	}
+	cmdArgs := cmd.Flags().Args()
+	// Cobra strips -- from positional args; read os.Args to preserve exact user arguments.
 	extra := extractAgentArgs(os.Args)
+	if len(extra) == 0 && len(cmdArgs) > 1 {
+		extra = cmdArgs[1:]
+	}
 	env, dir, argv, err := agent.PrepareExec(root, kind, project, extra)
 	if err != nil {
 		fatalf("%v", err)
@@ -82,6 +98,13 @@ func extractAgentArgs(osArgs []string) []string {
 		if a == "--" {
 			return osArgs[i+1:]
 		}
+	}
+	return nil
+}
+
+func resetOnlyCodexDesktop(kind string) error {
+	if kind != agent.KindCodexDesktop {
+		return fmt.Errorf("--reset 仅支持 codex-desktop")
 	}
 	return nil
 }
