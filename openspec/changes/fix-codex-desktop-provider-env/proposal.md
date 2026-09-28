@@ -1,7 +1,7 @@
 # Fix Codex Desktop Provider Env
 
 模式: 严格
-状态: 待验证
+状态: 待归档
 
 ## Why
 
