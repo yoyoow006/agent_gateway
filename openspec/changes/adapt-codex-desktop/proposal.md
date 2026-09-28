@@ -1,7 +1,7 @@
 # 适配 Linux Codex / ChatGPT 桌面应用
 
 模式: 严格
-状态: 待验证
+状态: 待归档
 
 ## Why
 
