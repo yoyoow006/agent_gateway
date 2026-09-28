@@ -36,5 +36,5 @@
 - `gofmt` on all changed Go files: applied; `git diff --check`: PASS.
 - `openspec validate fix-codex-desktop-provider-env --strict --no-interactive`: PASS.
 - `bash scripts/validate-workflow.sh --require-openspec`: PASS with `PASS=200 FAIL=0 SKIP=0` (seven suite-internal design skips are transparently listed and excluded from gate counts).
-- unverified（未验证范围）: live desktop title-generation smoke is not yet run.
+- unverified（未验证范围）: live desktop title-generation smoke is NOT_RUN; sandbox denies starting agw on `127.0.0.1:8787`, and no Codex Desktop process was running.
 - residual risk（残余风险）: running desktop instances retain their original environment and must be restarted after this change or after profile/token changes.
