@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -90,9 +91,10 @@ func TestPrepareExecCodexDesktopMissingAppDoesNotWriteHome(t *testing.T) {
 }
 
 func TestPrepareExecCodexDesktopAutomaticDiscoveryOnlyLinux(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		t.Skip("production resolver correctly uses host Linux; non-Linux fail-closed is covered by resolver test")
+	}
 	t.Setenv("AGW_CODEX_APP", "")
-	t.Setenv("AGW_DESKTOP_GOOS", "darwin")
-	defer t.Setenv("AGW_DESKTOP_GOOS", "")
 	_, _, _, err := PrepareExec(desktopRepo(t), KindCodexDesktop, "", nil)
 	if err == nil || !strings.Contains(err.Error(), "仅支持 Linux") {
 		t.Fatalf("unsupported error = %v", err)

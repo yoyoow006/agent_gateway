@@ -143,17 +143,10 @@ func Exec(env map[string]string, dir string, argv []string) error {
 func resolveCodexDesktopApp() (string, error) {
 	home, _ := os.UserHomeDir()
 	return ResolveCodexDesktopApp(DesktopResolveOptions{
-		GOOS:     desktopGOOS(),
+		GOOS:     runtime.GOOS,
 		Home:     home,
 		Explicit: os.Getenv("AGW_CODEX_APP"),
 	})
-}
-
-func desktopGOOS() string {
-	if v := os.Getenv("AGW_DESKTOP_GOOS"); v != "" {
-		return v
-	}
-	return runtime.GOOS
 }
 
 // PrepareResetDesktop 仅重置 agw 管理的 Codex 桌面独立 home。

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"agent_gateway/internal/config"
+
+	"github.com/BurntSushi/toml"
 )
 
 const desktopHomeRelative = ".agw/codex-desktop"
@@ -191,7 +193,7 @@ func validateManagedDesktopHome(plan desktopWritePlan) error {
 			return err
 		}
 		var cfg map[string]any
-		if _, err := decodeTOMLBytes(data, &cfg); err != nil {
+		if _, err := toml.Decode(string(data), &cfg); err != nil {
 			return fmt.Errorf("现有 agw Codex 桌面 config.toml 无效: %w", err)
 		}
 	}
@@ -206,11 +208,6 @@ func validateManagedDesktopHome(plan desktopWritePlan) error {
 		}
 	}
 	return nil
-}
-
-func decodeTOMLBytes(data []byte, out any) (any, error) {
-	// 保持依赖集中，不直接暴露 parser。
-	return tomlDecode(data, out)
 }
 
 func mustDesktopAuth(token string) []byte {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -101,7 +102,7 @@ func TestResolveCodexDesktopAppMissingHasActionableError(t *testing.T) {
 		t.Fatal("missing app should fail")
 	}
 	for _, want := range []string{"/usr/lib", "/opt", filepath.Join(home, "Applications"), filepath.Join(home, ".local", "share"), "AGW_CODEX_APP", "ChatGPT", "codex"} {
-		if !containsString(err.Error(), want) {
+		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q missing %q", err, want)
 		}
 	}
@@ -117,7 +118,7 @@ func TestResolveCodexDesktopAppAutomaticDiscoveryOnlyOnLinux(t *testing.T) {
 			return "", nil
 		},
 	}
-	if _, err := ResolveCodexDesktopApp(opts); err == nil || !containsString(err.Error(), "仅支持 Linux") {
+	if _, err := ResolveCodexDesktopApp(opts); err == nil || !strings.Contains(err.Error(), "仅支持 Linux") {
 		t.Fatalf("unsupported error = %v", err)
 	}
 	if called {
@@ -182,17 +183,4 @@ func TestResolveCodexDesktopAppScannerErrorStops(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want boom", err)
 	}
-}
-
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && stringIndex(s, substr) >= 0)
-}
-
-func stringIndex(s, substr string) int {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

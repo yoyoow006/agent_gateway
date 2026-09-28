@@ -59,11 +59,11 @@ agw SHALL confine all desktop configuration and authentication writes to `<root>
 - **THEN** preparation or reset fails before writes or recursive removal
 
 ### Requirement: Linux Codex Desktop 应用定位
-agw SHALL resolve a Linux desktop application from an explicit `AGW_CODEX_APP` path when supplied, otherwise from the supported Linux default roots and recognized application names. It SHALL fail before configuration writes when no supported executable is found, and SHALL NOT discover or start desktop applications on non-Linux platforms.
+agw SHALL resolve a Linux desktop application from an explicit `AGW_CODEX_APP` executable path when supplied. If `AGW_CODEX_APP` names an application directory, agw SHALL normalize it only to a recognized executable name; automatic discovery SHALL use the supported Linux default roots and recognized application names. It SHALL fail before configuration writes when no supported executable is found, and SHALL NOT discover or start desktop applications on non-Linux platforms.
 
 #### Scenario: 显式覆盖
-- **WHEN** `AGW_CODEX_APP` points to a recognized executable or application directory
-- **THEN** agw normalizes it to an executable path and does not scan default roots
+- **WHEN** `AGW_CODEX_APP` points to any executable file, or to a recognized application directory
+- **THEN** agw uses that executable directly for a file and normalizes a directory to a recognized executable name without scanning default roots
 
 #### Scenario: Linux 默认候选
 - **WHEN** no explicit path is supplied on Linux
