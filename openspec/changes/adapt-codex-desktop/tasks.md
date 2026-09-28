@@ -8,9 +8,9 @@
 
 ## 2. Build: Linux desktop app resolver
 
-1. [ ] Add failing tests for `AGW_CODEX_APP`, default root ordering, app-directory normalization, executable-name recognition, missing-app failure, and unsupported automatic discovery outside Linux.
-2. [ ] Implement the bounded Linux resolver and executable normalization in `internal/agent/`.
-3. [ ] Run `go test ./internal/agent -run 'Test.*Desktop.*Resolve|Test.*Desktop.*App' -count=1` and confirm the new tests pass.
+1. [x] Add failing tests for `AGW_CODEX_APP`, default root ordering, app-directory normalization, executable-name recognition, missing-app failure, and unsupported automatic discovery outside Linux.
+2. [x] Implement the bounded Linux resolver and executable normalization in `internal/agent/`.
+3. [x] Run `GOCACHE=/tmp/agw-gocache go test ./internal/agent -run 'TestResolve.*Desktop|Test.*Desktop.*(App|Resolve|Unsupported)' -count=1` and confirm the new tests pass.
 
 ## 3. Build: isolated managed Codex home writer
 
