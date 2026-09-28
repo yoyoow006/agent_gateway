@@ -29,6 +29,19 @@
 - **AND** 处置时必须先把旧正文中共享层缺失的 memory 条目并入共享层，再删除旧路径文件
 - **AND** 删除后主分支必须现跑完整工作流校验并全绿才可声称修复完成
 
+### Requirement: 外部技能纳入 Codex 技能树
+
+仓库 MAY install an externally sourced Codex skill when its exact repository, immutable ref, source path, Git blob SHA, byte count, and SHA-256 are recorded. Such a skill SHALL be installed only under the project-local `.codex/skills/` tree and SHALL NOT silently overwrite an existing destination or create a parallel Claude copy without a separate confirmed change.
+
+#### Scenario: 固定来源技能可审计
+- **WHEN** the repository contains an externally sourced Codex skill
+- **THEN** its change record identifies repository, immutable ref, source path, Git blob SHA, byte count, and SHA-256
+- **AND** the installed file hashes to the recorded SHA-256
+
+#### Scenario: 不覆盖既有技能
+- **WHEN** an external skill installation is attempted and the destination already exists
+- **THEN** installation fails before writing the destination
+
 ### Requirement: 共享 memory 按模块文件维护
 
 `.ai/memory/` SHALL 按知识模块分文件维护跨会话踩坑记录,条目格式与追加式维护规则不变;工作流治理与流程类条目 SHALL 位于 `workflow.md`,安装器契约类条目 SHALL 位于 `installer.md`,新增模块 SHALL 在出现首个条目时建同名模块文件。条目移动 SHALL NOT 改写正文;Archive 知识沉淀与日常"新坑立即写" SHALL 把条目写入对应模块文件。

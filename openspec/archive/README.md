@@ -14,3 +14,4 @@
 - `repair-required-workflow-baseline` — 修复 README 语义锚点与 installer 测试分类，恢复 required 门禁 — 严格
 - `adapt-codex-desktop` — Linux Codex/ChatGPT 桌面独立 home 启动与安全受管配置 — 严格
 - `fix-codex-desktop-provider-env` — Codex Desktop provider 环境变量认证与选定令牌注入 — 严格
+- `install-herdr-skill` — 以固定指纹安装 Codex Herdr 技能并纳入治理 — 严格
