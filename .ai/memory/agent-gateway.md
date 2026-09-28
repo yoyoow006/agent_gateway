@@ -72,3 +72,7 @@
 - 受管 config/auth 是一个 pair：写入前做时间戳备份，两个最终文件都要同目录 temp + fsync + rename；第二项失败必须恢复两项，rollback 也不能直接 `os.WriteFile` 覆盖最终文件。
 - `--reset` 只能作用于 canonical 校验后的精确 `<root>/.agw/codex-desktop`；最终 symlink 逃逸必须 fail closed。发现未识别内容时普通启动失败并提示显式 reset。
 - Linux 自动发现只扫描 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 的一级白名单目录；`AGW_CODEX_APP` 可显式给任意可执行文件，若给目录则只归一化到白名单可执行名。
+
+## 2026-09-28 · 来源变更 fix-codex-desktop-provider-env
+**坑**：Codex Desktop 的标题生成等内置结构化 `/v1/responses` 请求没有用受管 `auth.json` 中的 `OPENAI_API_KEY` 生成认证，仍会在 provider 缺少 `env_key` 且 launcher 未注入变量时返回 401。
+**解**：桌面受管 provider 写 `env_key = "AGW_API_KEY"`，launcher 向桌面子进程追加当前全局/项目虚拟令牌；覆盖项必须排序后追加在继承环境之后，确保外部同名变量不能覆盖选定档案。`config.toml` 只能引用变量名，不能写 token。

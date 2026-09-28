@@ -38,3 +38,11 @@
 - `bash scripts/validate-workflow.sh --require-openspec`: PASS with `PASS=200 FAIL=0 SKIP=0` (seven suite-internal design skips are transparently listed and excluded from gate counts).
 - unverified（未验证范围）: live desktop title-generation smoke is NOT_RUN; sandbox denies starting agw on `127.0.0.1:8787`, and no Codex Desktop process was running.
 - residual risk（残余风险）: running desktop instances retain their original environment and must be restarted after this change or after profile/token changes.
+
+## Final Archive Record
+
+- 最终 manifest ID: `1682c7a9ad5341df325501b26a50fb140e8ea8a45991d10db18a07943849957b`（该 manifest 对 Verify 后新增的任务证据提交呈 STALE；其 VALID 结论对应下方 comparison base，不用于未经审查的归档状态。）
+- comparison base: `main` `bf908cd1d6c3750a83b3e59fa97550667593af2e`
+- finding 状态: Critical 0 / Important 0 / Minor 0；open 0，resolved 0，not-an-issue 0，accepted-risk 0。
+- 未验证范围: 真实 Codex Desktop 标题生成 smoke NOT_RUN；沙箱禁止 agw 监听 `127.0.0.1:8787`，检查时无已运行桌面进程。
+- 残余风险: 已运行桌面进程保留旧启动环境；应用本修复或切换档案/令牌后必须退出并重启桌面应用。
