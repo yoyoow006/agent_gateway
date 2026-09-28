@@ -64,3 +64,11 @@
 - `provider add` 的 `--model` / `--header` 必须在写盘前逐项校验 `key=value`，key/value 非空且 key 不重复；非法输入不得创建 local.toml。
 - Cobra StringArray 在同进程测试中会残留，重复数组参数要绑定包级变量并在命令 defer 清空。
 - `local.toml` 原子替换后必须 stat 并验证最终 mode 为 0600，失败不得报告保存成功。
+
+## Linux Codex Desktop 独立 home
+
+- `agw run codex-desktop` 仅支持 Linux，生产平台判定必须直接使用 `runtime.GOOS`，不得引入测试专用环境变量覆盖。
+- 桌面模式绝不读取/写入用户默认 `~/.codex/config.toml` / `auth.json`；子进程使用 `<root>/.agw/codex-desktop` 作为 `CODEX_HOME`，受管 auth 权限 0600、目录 0700。
+- 受管 config/auth 是一个 pair：写入前做时间戳备份，两个最终文件都要同目录 temp + fsync + rename；第二项失败必须恢复两项，rollback 也不能直接 `os.WriteFile` 覆盖最终文件。
+- `--reset` 只能作用于 canonical 校验后的精确 `<root>/.agw/codex-desktop`；最终 symlink 逃逸必须 fail closed。发现未识别内容时普通启动失败并提示显式 reset。
+- Linux 自动发现只扫描 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 的一级白名单目录；`AGW_CODEX_APP` 可显式给任意可执行文件，若给目录则只归一化到白名单可执行名。

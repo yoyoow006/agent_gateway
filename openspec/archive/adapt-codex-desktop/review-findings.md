@@ -60,3 +60,11 @@
   - Explicit launcher/file override and argument passthrough examples.
   - Command table and FAQ now distinguish Codex CLI from Codex desktop.
 - Verification: documentation keyword/section inspection and `git diff --check` PASS.
+
+## Archive final evidence
+
+- Final manifest: `bd9862a276d1b452571d3b78dd1baf8ba3fd08b8d601c8a48ac20653d73b488a`
+- Comparison base: `9a6658f513e70b5767768750f839532c2087eede`
+- Finding status: 5 task findings (3 resolved, 2 minor documented), 4 quality findings (2 resolved, 2 minor fixed); open Critical=0, Important=0, accepted-risk=0.
+- Unverified scope: real Linux GUI launch was NOT_RUN; full CLI/gateway suites are blocked by sandbox local-listen at baseline.
+- Residual risk: intermediate root-contained symlinks are accepted by path policy; desktop app may show a fresh environment because OAuth/session data is intentionally not migrated; concurrent parent removal during reset fails closed.
