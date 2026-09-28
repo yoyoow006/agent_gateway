@@ -262,3 +262,24 @@ func newestBackup(t *testing.T, dir, suffix string) string {
 	}
 	return filepath.Join(dir, found)
 }
+func TestDesktopRollbackRemovesTemporaryFiles(t *testing.T) {
+	root, home, cfgPath := managedPaths(t)
+	if _, err := EnsureDesktopHome(root, "127.0.0.1:8787", "old"); err != nil {
+		t.Fatal(err)
+	}
+	authPath := filepath.Join(home, "auth.json")
+	failer := func(path string) error {
+		if strings.HasSuffix(path, ".tmp") && strings.HasPrefix(filepath.Base(path), "auth.json.") {
+			return os.ErrPermission
+		}
+		return nil
+	}
+	if _, err := EnsureDesktopHomeWithFailer(root, "127.0.0.1:9999", "new", failer); err == nil {
+		t.Fatal("expected second write failure")
+	}
+	for _, path := range []string{cfgPath + ".tmp", authPath + ".tmp"} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("temporary rollback file remains: %s (%v)", path, err)
+		}
+	}
+}

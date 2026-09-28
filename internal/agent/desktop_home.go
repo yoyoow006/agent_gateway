@@ -102,23 +102,21 @@ func EnsureDesktopHomeWithFailer(root, listen, token string, failer func(path st
 		return "", err
 	}
 
-	configWritten := false
-	authWritten := false
+	committed := false
+	changed := false
 	defer func() {
-		if configWritten || authWritten {
+		if changed && !committed {
 			rollbackDesktopPair(plan, oldConfig, oldConfigExists, oldAuth, oldAuthExists)
 		}
 	}()
 	if err := atomicWriteDesktopFile(plan.configPath, plan.configData, failer); err != nil {
 		return "", err
 	}
-	configWritten = true
+	changed = true
 	if err := atomicWriteDesktopFile(plan.authPath, plan.authData, failer); err != nil {
 		return "", err
 	}
-	authWritten = true
-	configWritten = false
-	authWritten = false
+	committed = true
 	return plan.home, nil
 }
 
@@ -244,14 +242,7 @@ func writeDesktopBackup(home string, stamp int64, name string, data []byte, exis
 		data = []byte{}
 	}
 	path := filepath.Join(home, "backups", fmt.Sprintf("%019d-%s", stamp, name))
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return atomicWriteDesktopFile(path, data, nil)
 }
 
 func atomicWriteDesktopFile(path string, data []byte, failer func(path string) error) error {
@@ -305,5 +296,5 @@ func restoreOptionalFile(path string, data []byte, exists bool) error {
 		}
 		return nil
 	}
-	return os.WriteFile(path, data, 0o600)
+	return atomicWriteDesktopFile(path, data, nil)
 }
