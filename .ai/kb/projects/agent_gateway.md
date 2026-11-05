@@ -24,16 +24,16 @@ sources:
 
 # agent_gateway 项目卡
 
-> agw 是 Go 编写的本地大模型 API 路由网关，用于让 Claude Code 与 Codex 指向同一本地入口，并由网关完成供应商选择、协议转换、故障切换与项目档案路由。
+> agw 是 Go 编写的本地大模型 API 路由网关，用于让 Claude Code、Codex 与 OpenCode 2.x 指向同一本地入口，并由网关完成供应商选择、协议转换、故障切换与项目档案路由。
 
 ## 职责
 
 - 负责：
   - 以 `agw` CLI 启动本地网关并管理供应商池、项目工作区与 agent 启动配置。
-  - 在 Claude Code / Codex 与 Anthropic、OpenAI Chat、OpenAI Responses 供应商之间做同协议透传与跨协议翻译。
+  - 在 Claude Code / Codex / OpenCode 与 Anthropic、OpenAI Chat、OpenAI Responses 供应商之间做同协议透传与跨协议翻译。
   - 在请求边界按供应商链执行 failover，并用被动熔断跳过连续失败供应商。
   - 把虚拟令牌解析为全局或项目档案，隔离不同业务项目的供应商子集、首选和模型映射。
-  - 生成 Claude / Codex 独立配置并以项目上下文启动 agent；Linux 下可启动 Codex / ChatGPT 桌面应用并使用网关根内独立 Codex home，不修改用户默认配置文件。
+  - 生成 Claude / Codex 独立配置、为 OpenCode 2.x 注入运行时配置，并以项目上下文启动 agent；Linux 下可启动 Codex / ChatGPT 桌面应用并使用网关根内独立 Codex home，不修改用户默认配置文件。
 - 不负责：
   - TUI/Web 控制台、主动拨测、负载均衡、Windows 支持、计费统计和音视频多模态。
   - 代理 `GET /v1/responses/{id}` 单响应拉取；Codex 按无响应存储模式自包含上下文。
@@ -48,7 +48,7 @@ sources:
 - `internal/gateway/forward.go` / `forward` — 供应商链尝试、可重试错误切换、同协议透传与跨协议翻译。
 - `internal/protocol/` — 中立 IR、SSE 读写和三套协议编解码器；根包 `Codec` 定义请求、响应、流式与错误映射接口，`anthropic`、`openaichat`、`openairesponses` 子包分别实现三种线上协议。
 - `internal/provider/breaker.go` / `Breaker`, `Registry` — 每供应商连续失败计数、指数退避冷却、半开探针与运行指标。
-- `internal/agent/install.go`, `internal/agent/run.go` — 安装 Claude/Codex、生成独立配置、解析项目令牌并 exec 启动 agent。
+- `internal/agent/install.go`, `internal/agent/run.go` — 安装 Claude/Codex/OpenCode 2.x、生成或注入 agent 配置、解析项目令牌并 exec 启动 agent。
 - `internal/workspace/project.go` / `New`, `List` — `projects/<名>/` 业务工作区创建、git 初始化和列表。
 - `config/default.toml` — 提交版默认配置与配置语义说明；密钥不得写入本文件。
 
@@ -59,6 +59,7 @@ sources:
   - 安装/运行 Claude Code 与 Codex 依赖外部 npm 包和用户机器上的 Node.js 环境；本仓库不锁定这些外部 CLI 的版本。
 - 下游消费者：
   - Claude Code 经独立 `--settings` 文件指向 agw。
+  - OpenCode 2.x 经子进程 `OPENCODE_CONFIG_CONTENT` 声明 OpenAI-compatible provider `agw`，认证通过 `{env:AGW_API_KEY}` 与当前档案令牌环境变量组合解析；agw 不读写用户 OpenCode 配置/凭据。
   - Codex CLI 经 `$CODEX_HOME/agw.config.toml` 的 `agw` profile 指向 agw；Linux 桌面模式经 `CODEX_HOME=<网关根>/.agw/codex-desktop`、子进程 `AGW_API_KEY=<当前档案虚拟令牌>` 与受管 `config.toml` / `auth.json` 指向 agw；provider 通过 `env_key` 读取变量，`config.toml` 不含密钥。
   - `projects/<名>/` 中创建的业务项目是运行时项目档案消费者；当前仓库未登记具体业务项目。
 - 共享契约：

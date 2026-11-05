@@ -80,3 +80,7 @@
 ## 2026-11-05 · 来源变更 add-opencode-2-launcher
 **坑**：CLI 测试同进程复用包级 `runCmd` 时，`--reset` 布尔 flag 会跨测试残留为 true，导致后续 `agw run <kind>` 测试误入 desktop-only reset 分支。
 **解**：新 CLI run 测试如依赖默认 reset 状态，必须在 `SetArgs` 中显式传 `--reset=false`；生产代码不需要为此增加状态清理逻辑。
+
+## 2026-11-05 · 来源变更 add-opencode-2-launcher
+**坑**：OpenCode 用户/项目配置会继续合并，同名 provider/模型可能与 agw 注入语义冲突；且 OpenCode 1.x 与 2.x 配置能力不同。
+**解**：OpenCode 适配只支持 2.x，安装固定 `@opencode/cli@^2`；启动用 `OPENCODE_CONFIG_CONTENT` 运行时覆盖冲突键，JSON 只写 `{env:AGW_API_KEY}` 引用，令牌经排序后的子进程环境覆盖注入，绝不写入持久配置或日志。
