@@ -76,3 +76,7 @@
 ## 2026-09-28 · 来源变更 fix-codex-desktop-provider-env
 **坑**：Codex Desktop 的标题生成等内置结构化 `/v1/responses` 请求没有用受管 `auth.json` 中的 `OPENAI_API_KEY` 生成认证，仍会在 provider 缺少 `env_key` 且 launcher 未注入变量时返回 401。
 **解**：桌面受管 provider 写 `env_key = "AGW_API_KEY"`，launcher 向桌面子进程追加当前全局/项目虚拟令牌；覆盖项必须排序后追加在继承环境之后，确保外部同名变量不能覆盖选定档案。`config.toml` 只能引用变量名，不能写 token。
+
+## 2026-11-05 · 来源变更 add-opencode-2-launcher
+**坑**：CLI 测试同进程复用包级 `runCmd` 时，`--reset` 布尔 flag 会跨测试残留为 true，导致后续 `agw run <kind>` 测试误入 desktop-only reset 分支。
+**解**：新 CLI run 测试如依赖默认 reset 状态，必须在 `SetArgs` 中显式传 `--reset=false`；生产代码不需要为此增加状态清理逻辑。
