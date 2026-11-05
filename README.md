@@ -43,7 +43,7 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 ./agw run claude --project demo
 ./agw run codex --project demo -- --model gpt-5.2
 ./agw run codex-desktop --project demo   # Linux 桌面应用（独立 CODEX_HOME）
-./agw run opencode --project demo -- --model agw/agw
+./agw run opencode --project demo -- run --model agw/agw --standalone "..."
 ```
 
 从这一刻起：Claude Code、Codex 与 OpenCode 的模型请求都经过 agw。任何一家供应商限流（429）、过载（529）、超时或宕机，网关在**下一个请求**自动切到健康供应商——agent 与正在运行的任务完全无感。
@@ -90,7 +90,7 @@ agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）�
 
 `agw run claude --project X` 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`；`agw run codex` 注入 `AGW_API_KEY`。`agw run codex-desktop` 同样给子进程注入当前档案的 `AGW_API_KEY`；`agw run opencode` 注入 `OPENCODE_CONFIG_CONTENT` 与 `AGW_API_KEY`。不传项目时按 cwd 推断。
 
-**OpenCode 2.x**：`agw run opencode` 通过 OpenCode 官方运行时配置源 `OPENCODE_CONFIG_CONTENT` 注入 `agw` provider（`@ai-sdk/openai-compatible`、`baseURL=<网关>/v1`、`apiKey={env:AGW_API_KEY}`），当前档案令牌只经子进程环境传递；默认声明可选择的占位模型 `agw`，可用 OpenCode 原生 `-- --model ...` 覆盖。OpenCode 用户全局/项目配置、插件和凭据不被读取或修改；非冲突配置继续合并，同名 `agw` provider/模型冲突键以 agw 注入为准。OpenCode 后台 service、登录与权限仍由 OpenCode 自己管理，agw 不提供 reset。
+**OpenCode 2.x**：`agw run opencode` 通过 OpenCode 官方运行时配置源 `OPENCODE_CONFIG_CONTENT` 注入 `agw` provider（`@ai-sdk/openai-compatible`、`baseURL=<网关>/v1`、`apiKey={env:AGW_API_KEY}`），当前档案令牌只经子进程环境传递；默认声明可选择的占位模型 `agw`，默认使用 `-- run --model agw/agw --standalone`（OpenCode 2.2 根命令无 `--model`）。其他 `--model agw/<name>` 还必须已在 OpenCode provider 配置中声明，否则 OpenCode 报 `Model unavailable`。若复用 OpenCode 后台 service，须先在 agw 启动环境中 `-- service restart`，否则旧 service 可能报 `Model unavailable`。provider 还需把占位模型 `agw` 映射到上游真实模型，或设置供应商 `default_model`，否则上游可能报“模型不存在”。OpenCode 用户全局/项目配置、插件和凭据不被读取或修改；非冲突配置继续合并，同名 `agw` provider/模型冲突键以 agw 注入为准。OpenCode 后台 service、登录与权限仍由 OpenCode 自己管理，agw 不提供 reset。
 
 **Linux Codex / ChatGPT 桌面应用**：`agw run codex-desktop` 不负责安装或升级桌面应用；请先安装受支持的 Linux 桌面应用，或用 `AGW_CODEX_APP` 指向应用目录/可执行文件。启动后使用 `<网关根>/.agw/codex-desktop` 作为子进程 `CODEX_HOME`，并注入当前档案的 `AGW_API_KEY`；只写 agw 管理的独立 `config.toml` / `auth.json`（0600）。`config.toml` 通过 `env_key = "AGW_API_KEY"` 引用该变量且不含密钥，完全不读取、不修改用户默认 `~/.codex`。自动发现仅搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 与 `ChatGPT/chatgpt/Codex/codex/codex-beta` 应用目录。macOS / Windows 桌面应用不支持。
 

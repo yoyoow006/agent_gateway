@@ -58,7 +58,7 @@ agw SHALL provide `opencode` as an agent kind that starts a locally installed Op
 - **AND** runtime provider configuration uses the same selected token by environment reference
 
 #### Scenario: 用户参数透传
-- **WHEN** the user runs `agw run opencode --project demo -- --model agw/custom --standalone`
+- **WHEN** the user runs `agw run opencode --project demo -- run --model agw/custom --standalone`
 - **THEN** the child argv starts with `opencode` and contains only the user-provided arguments after it
 - **AND** agw does not add interactive-mode, standalone, server, or prompt flags on its own
 

@@ -84,3 +84,19 @@
 ## 2026-11-05 · 来源变更 add-opencode-2-launcher
 **坑**：OpenCode 用户/项目配置会继续合并，同名 provider/模型可能与 agw 注入语义冲突；且 OpenCode 1.x 与 2.x 配置能力不同。
 **解**：OpenCode 适配只支持 2.x，安装固定 `@opencode/cli@^2`；启动用 `OPENCODE_CONFIG_CONTENT` 运行时覆盖冲突键，JSON 只写 `{env:AGW_API_KEY}` 引用，令牌经排序后的子进程环境覆盖注入，绝不写入持久配置或日志。
+
+## 2026-11-05 · 来源变更 add-opencode-2-launcher
+**坑**：OpenCode 2.2 根命令没有 `--model` 旗标；文档把 `agw run opencode -- --model ...` 写成可用示例会触发 `Unrecognized flag: --model in command opencode`。
+**解**：模型旗标必须放在支持它的 OpenCode 子命令上，例如 `agw run opencode -- run --model agw/agw "..."` 或 `-- mini --model agw/agw`；帮助/文档不得暗示根命令接受 `--model`。
+
+## 2026-11-05 · 来源变更 add-opencode-2-launcher
+**坑**：OpenCode 2.2 的后台 service 是独立常驻进程，首次启动时固定当时的 `OPENCODE_CONFIG_CONTENT` / `AGW_API_KEY`；之后 agw 客户端临时注入的环境变量不会传给已存在 service，旧 service 模型清单没有 `agw/agw`，于是报 `Model unavailable: agw/agw`。
+**解**：先在 agw 启动环境中重启 OpenCode service（`agw run opencode -- service restart`），或本次启动加 `--standalone`（如 `agw run opencode -- run --model agw/agw --standalone "..."`）；同一注入配置已在 OpenCode 2.2.5 standalone 下验证 `opencode models` 能列出 `agw/agw`。
+
+## 2026-11-05 · 来源变更 add-opencode-2-launcher
+**坑**：OpenCode 注入的占位模型名是 `agw`；若网关 provider 只配置了 `model_map` 而未给 `agw` 配置映射，也没有配置 `default_model`，网关会把 `model="agw"` 原样透传上游，上游会报模型不存在（如 yxr 错误码 1211）。
+**解**：为所有会承接 OpenCode 的 provider 显式配置 `model_map: agw -> <上游真实模型>`，或配置供应商级 `default_model`；多供应商 failover 建议逐供应商映射，避免首选 403 后备选收到未映射模型。
+
+## 2026-11-05 · 来源变更 add-opencode-2-launcher
+**坑**：OpenCode 会校验 `--model agw/<name>` 是否已声明；agw runtime JSON 当前只声明 `agw/agw`，直接传 `--model agw/gpt-5.6-sol` 会报 `Model unavailable`。
+**解**：短期内继续使用 `--model agw/agw` 并在网关为 `agw` 配置映射/default_model；或在不冲突的用户/项目 OpenCode 配置里为 `agw` provider 额外声明该模型（实测 runtime 注入与非冲突模型键合并后可见）。要自动暴露网关模型目录，需要另立 OpenSpec 变更扩展 `OpenCodeConfigContent`。

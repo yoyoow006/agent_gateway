@@ -223,7 +223,7 @@ agw project new demo          # 创建 projects/demo（git init + agw.toml 模�
 agw run claude --project demo # → claude --settings <根>/.agw/claude-settings.demo.json
 agw run codex  --project demo # → codex -p agw（+ 环境变量 AGW_API_KEY=<demo 项目令牌>）
 agw run codex  -- --model gpt-5.2   # `--` 之后的参数原样透传给 agent
-agw run opencode --project demo -- --model agw/agw
+agw run opencode --project demo -- run --model agw/agw --standalone "..."
 ```
 
 ### 5.2.1 OpenCode 2.x 启动方式
@@ -233,7 +233,7 @@ agw run opencode --project demo -- --model agw/agw
 - `OPENCODE_CONFIG_CONTENT`：合法 JSON，声明 provider `agw`、`@ai-sdk/openai-compatible`、`baseURL=<网关>/v1`、`apiKey="{env:AGW_API_KEY}"` 和可选择模型 `agw`；该 JSON 不含令牌。
 - `AGW_API_KEY`：当前全局/项目档案虚拟令牌，覆盖继承环境中的旧值。
 
-OpenCode 会继续合并用户全局配置、项目配置、插件与命令；非冲突键保留，同名 `agw` provider/模型等冲突键以 agw 运行时配置为准。默认模型 `agw` 只是 OpenCode 的可选项，实际模型名仍按 agw 的 `model_map` / `default_model` 路由；可用 OpenCode 原生 `-- --model ...` 覆盖。OpenCode 后台 service、登录、权限与会话数据由 OpenCode 自己管理；如需独立/排查，请使用 OpenCode 原生 `--standalone` 或 service 命令，agw 不提供 reset。
+OpenCode 会继续合并用户全局配置、项目配置、插件与命令；非冲突键保留，同名 `agw` provider/模型等冲突键以 agw 运行时配置为准。默认模型 `agw` 只是 OpenCode 的可选项，实际模型名仍按 agw 的 `model_map` / `default_model` 路由；provider 必须为 `agw` 配置 `model_map` 映射或配置 `default_model`，否则上游会收到原始模型名并可能报“模型不存在”；agw runtime 注入当前只声明 `agw/agw`，直接 `--model agw/<其他虚拟模型>` 会被 OpenCode 判为 `Model unavailable`，如需其他虚拟模型需在用户/项目 OpenCode 配置中为 `agw` provider 额外声明该模型；可在 OpenCode 支持模型的子命令中覆盖（如 `-- run --model ... --standalone` 或 `-- mini --model ... --standalone`；OpenCode 2.2 根命令无 `--model`）。OpenCode 后台 service、登录、权限与会话数据由 OpenCode 自己管理；如需确定本次进程使用 agw 注入配置，推荐加 `--standalone`；否则必须先在同一 `agw run opencode` 环境中执行 `-- service restart`，否则旧后台 service 不会看到 `OPENCODE_CONFIG_CONTENT`，可能报 `Model unavailable: agw/agw`。
 
 ### 5.2.2 启动方式说明
 
@@ -351,9 +351,10 @@ agw status                               # 各供应商状态：closed/open/half
 | 现象 | 原因与处理 |
 |---|---|
 | OpenCode 找不到命令/版本不符 | 运行 `agw install opencode`（安装 `@opencode/cli@^2`），或自行确保已安装 OpenCode 2.x；OpenCode 1.x 不在支持范围 |
-| OpenCode 模型不合适 | 默认占位为 `agw/agw`；用 `agw run opencode -- --model <provider/model>` 透传 OpenCode 原生模型参数 |
+| OpenCode 模型不合适 | 默认入口是 `--model agw/agw --standalone`；其他 `<provider/model>` 必须已在该 provider 配置中声明，否则 OpenCode 报 `Model unavailable`（根命令不接受 `--model`） |
 | 用户 OpenCode 配置与 `agw` provider 同名冲突 | agw 通过 `OPENCODE_CONFIG_CONTENT` 覆盖同名 provider/模型冲突键；建议用户侧改名，非冲突配置继续生效 |
-| OpenCode service 异常 | agw 不管理 service；使用 OpenCode 原生 service 命令，或启动时加 `--standalone` |
+| OpenCode service 异常 / `Model unavailable: agw/agw` | agw 不 reset service；推荐本次启动加 `--standalone`。若继续复用后台 service，先在同一 `agw run opencode` 环境执行 `-- service restart` |
+| OpenCode/上游报“模型不存在”（如 yxr 1211） | `agw` 占位名未映射：为承接 OpenCode 的 provider 加 `--model agw=<上游真实模型>`，或设置 `--default-model <上游真实模型>`；多供应商 failover 应逐供应商映射 |
 | agent 报 401 "未知或缺失虚拟令牌" | 没经 `agw run` 启动或令牌被改过；重新 `agw run ...`，或查 `config/local.toml` 令牌 |
 | 401 但上游密钥正常 | 项目 `agw.toml` 引用了不存在的供应商（503 配置错误文案会点名）；`agw provider list` 核对 |
 | 503 "档案内没有启用的供应商" | 全部被 disable 或项目覆盖列表为空；`agw provider list` 检查 |
