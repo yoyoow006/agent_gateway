@@ -1,11 +1,12 @@
 # agw —— 本地大模型 API 路由网关
 
-agw（agent gateway）在 AI agent（Claude Code / Codex）与大模型供应商之间做本地路由：**agent 一次性指向网关，网关负责协议转换、故障切换与项目档案路由——切换供应商不需要重启 agent，正在运行的任务不中断。**
+agw（agent gateway）在 AI agent（Claude Code / Codex / OpenCode）与大模型供应商之间做本地路由：**agent 一次性指向网关，网关负责协议转换、故障切换与项目档案路由——切换供应商不需要重启 agent，正在运行的任务不中断。**
 
 ```text
 Claude Code ──ANTHROPIC_BASE_URL──►┐
                                    │  agw (127.0.0.1:8787)
-Codex ──config.toml base_url──────►┤  ├─ 令牌→项目档案
+Codex ──config.toml base_url──────►┤
+OpenCode ──runtime provider────────►┤  ├─ 令牌→项目档案
                                    │  ├─ 同协议字节级透传（零解析）
                                    │  ├─ 跨协议翻译（anthropic ↔ openai-chat ↔ openai-responses）
                                    │  └─ 请求边界 failover + 被动熔断
@@ -15,7 +16,7 @@ Codex ──config.toml base_url──────►┤  ├─ 令牌→项目
 
 ## 快速开始
 
-前置：Go ≥1.24.11（构建）、Node.js ≥18 + npm（安装 agent）、git。Linux 上如需 `codex-desktop`，另需自行安装 Codex / ChatGPT 桌面应用。完整的编译安装与使用说明见 [docs/usage-guide.md](docs/usage-guide.md)。
+前置：Go ≥1.24.11（构建）、Node.js ≥18 + npm（安装 agent；OpenCode 仅支持 2.x）、git。Linux 上如需 `codex-desktop`，另需自行安装 Codex / ChatGPT 桌面应用。完整的编译安装与使用说明见 [docs/usage-guide.md](docs/usage-guide.md)。
 
 ```bash
 # 1. 构建
@@ -32,9 +33,9 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 ./agw start
 ./agw status
 
-# 4. 一键安装 agent（npm 安装 + 生成独立配置；不碰你的 ~/.claude 与 ~/.codex 默认文件）
+# 4. 一键安装 agent（npm 安装 + 独立/运行时配置；不碰你的 ~/.claude、~/.codex 与 OpenCode 默认文件）
 ./agw install claude
-./agw install codex
+./agw install opencode   # 仅接受 @opencode/cli@^2
 # Linux 桌面应用不由 agw 安装；请先自行安装 Codex / ChatGPT 桌面应用，再用 run codex-desktop
 
 # 5. 在项目里启动 agent（项目令牌自动注入，exec 替换进程）
@@ -42,9 +43,10 @@ cp .env.example .env && chmod 600 .env   # 编辑 .env 填入 OFFICIAL_KEY / REL
 ./agw run claude --project demo
 ./agw run codex --project demo -- --model gpt-5.2
 ./agw run codex-desktop --project demo   # Linux 桌面应用（独立 CODEX_HOME）
+./agw run opencode --project demo -- --model agw/agw
 ```
 
-从这一刻起：Claude Code 与 Codex 的所有请求都经过 agw。任何一家供应商限流（429）、过载（529）、超时或宕机，网关在**下一个请求**自动切到健康供应商——agent 与正在运行的任务完全无感。
+从这一刻起：Claude Code、Codex 与 OpenCode 的模型请求都经过 agw。任何一家供应商限流（429）、过载（529）、超时或宕机，网关在**下一个请求**自动切到健康供应商——agent 与正在运行的任务完全无感。
 
 ### 配置速查：放 PATH 之后 agw 读哪份配置？
 
@@ -86,7 +88,9 @@ agw **不**根据自身二进制位置（`/usr/local/bin/agw`、`~/bin/agw`）�
 | `[gateway] default_token` | 全局供应商池 |
 | `[projects.<名>] token` | 该项目覆盖（供应商子集/粘性/模型映射） |
 
-`agw run claude --project X` 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`；`agw run codex` 注入 `AGW_API_KEY`。`agw run codex-desktop` 同样给子进程注入当前档案的 `AGW_API_KEY`。不传项目时按 cwd 推断。
+`agw run claude --project X` 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`；`agw run codex` 注入 `AGW_API_KEY`。`agw run codex-desktop` 同样给子进程注入当前档案的 `AGW_API_KEY`；`agw run opencode` 注入 `OPENCODE_CONFIG_CONTENT` 与 `AGW_API_KEY`。不传项目时按 cwd 推断。
+
+**OpenCode 2.x**：`agw run opencode` 通过 OpenCode 官方运行时配置源 `OPENCODE_CONFIG_CONTENT` 注入 `agw` provider（`@ai-sdk/openai-compatible`、`baseURL=<网关>/v1`、`apiKey={env:AGW_API_KEY}`），当前档案令牌只经子进程环境传递；默认声明可选择的占位模型 `agw`，可用 OpenCode 原生 `-- --model ...` 覆盖。OpenCode 用户全局/项目配置、插件和凭据不被读取或修改；非冲突配置继续合并，同名 `agw` provider/模型冲突键以 agw 注入为准。OpenCode 后台 service、登录与权限仍由 OpenCode 自己管理，agw 不提供 reset。
 
 **Linux Codex / ChatGPT 桌面应用**：`agw run codex-desktop` 不负责安装或升级桌面应用；请先安装受支持的 Linux 桌面应用，或用 `AGW_CODEX_APP` 指向应用目录/可执行文件。启动后使用 `<网关根>/.agw/codex-desktop` 作为子进程 `CODEX_HOME`，并注入当前档案的 `AGW_API_KEY`；只写 agw 管理的独立 `config.toml` / `auth.json`（0600）。`config.toml` 通过 `env_key = "AGW_API_KEY"` 引用该变量且不含密钥，完全不读取、不修改用户默认 `~/.codex`。自动发现仅搜索 `/usr/lib`、`/opt`、`~/Applications`、`~/.local/share` 与 `ChatGPT/chatgpt/Codex/codex/codex-beta` 应用目录。macOS / Windows 桌面应用不支持。
 
@@ -141,9 +145,9 @@ preferred = "relay"
 | `agw provider list/add/remove/enable/disable/test` | 供应商池管理；`test` 探测 `/v1/models` 延迟 |
 | `agw switch <名>` | 粘性首选 |
 | `agw reload` | 不写盘地触发网关热重载（手动编辑 `config/local.toml` 后使用；网关未运行时退出 0） |
-| `agw install claude\|codex` | npm 安装 + 生成独立配置（零接触用户默认文件） |
+| `agw install claude\|codex\|opencode` | npm 安装；Claude/Codex 生成独立配置，OpenCode 启动时注入运行时配置（均零接触用户默认文件） |
 | `agw run codex-desktop` | Linux Codex / ChatGPT 桌面启动入口；不安装应用，使用 `<根>/.agw/codex-desktop` 独立 home 并注入 `AGW_API_KEY` |
-| `agw run claude\|codex [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile |
+| `agw run claude\|codex\|opencode [-p 项目] [-- 参数]` | 项目上下文启动 agent：claude 经 `--settings` 独立文件、codex 经 `-p agw` profile、opencode 经 `OPENCODE_CONFIG_CONTENT` 运行时覆盖 |
 | `agw project new/list` | 业务项目工作区（独立 git 仓库） |
 
 `GET /v1/models` 是本地注册摘要，不查询上游完整模型目录：已配置 `model_map` 时返回映射键；全部供应商均无映射时返回 `via-<供应商名>` 占位。`default_model` 不进入该列表。
@@ -159,14 +163,15 @@ preferred = "relay"
 
 ## 回滚
 
-- agent 侧零接触设计：`~/.claude/settings.json` 与 `~/.codex/config.toml` 从未被 agw 修改，无需恢复。删除 agw 生成的独立文件即完全卸载配置：`<网关根>/.agw/`（claude settings，含令牌）与 `$CODEX_HOME/agw.config.toml`（codex profile）。
+- agent 侧零接触设计：`~/.claude/settings.json` 与 `~/.codex/config.toml`、OpenCode 配置与凭据从未被 agw 修改，无需恢复。删除 agw 生成的独立文件即卸载 Claude/Codex 配置：`<网关根>/.agw/`（claude settings，含令牌）与 `$CODEX_HOME/agw.config.toml`（codex profile）。OpenCode 不生成持久配置；如需卸载 CLI，运行 `opencode uninstall` 或 `npm uninstall -g @opencode/cli`。
 - 网关自身：本仓库 feature 分支按任务提交，可逐提交回退。
 - 临时绕过网关：直接裸跑 `claude` / `codex`（不带 agw 的 `--settings`/`-p` 参数）即用你自己的默认配置。
 
-### 独立配置注入方式（实测 claude `--settings` 为叠加层、codex 0.149.1 `-p` 为独立 profile 文件叠加）
+### 独立/运行时配置注入方式（实测 claude `--settings` 为叠加层、codex 0.149.1 `-p` 为独立 profile 文件叠加、OpenCode 2.x `OPENCODE_CONFIG_CONTENT` 为运行时覆盖）
 
 - `agw run claude` → `claude --settings <根>/.agw/claude-settings.<项目|global>.json`（0600，每次启动按当前项目令牌重写；你自己的 settings 继续生效，仅同名 env 键被覆盖）。
 - `agw run codex` → `codex -p agw`（`$CODEX_HOME/agw.config.toml`，尊重 `CODEX_HOME` 环境变量；密钥经 `AGW_API_KEY` 注入，profile 文件不含密钥）。
+- `agw run opencode`（2.x）→ 子进程收到 `OPENCODE_CONFIG_CONTENT`（合法 JSON，不含令牌）与当前档案 `AGW_API_KEY`；provider 认证写 `{env:AGW_API_KEY}`。不读取、不修改用户 OpenCode 配置/凭据；用户非冲突配置继续合并，同名冲突键由 agw 覆盖。固定模型 `agw` 仅供 OpenCode 选择，实际模型仍按网关映射/兜底路由。
 - `agw run codex-desktop`（仅 Linux）→ 启动 Codex / ChatGPT 桌面应用，并给子进程设置 `CODEX_HOME=<根>/.agw/codex-desktop`。独立 home 中 `auth.json` 仅含 agw 虚拟令牌，不迁移官方 OAuth；应用可能表现为全新环境。已有桌面进程不会被 agw 检查或终止。
 
 ## 开发

@@ -153,8 +153,11 @@ func TestInstallZeroTouch(t *testing.T) {
 	if err := InstallCodex(Options{Home: home, Root: root, Listen: "127.0.0.1:8787", Runner: runner}); err != nil {
 		t.Fatal(err)
 	}
-	// npm 各两条（探测+安装）
-	if len(runner.commands) != 4 {
+	if err := InstallOpenCode(Options{Home: home, Root: root, Listen: "127.0.0.1:8787", Runner: runner}); err != nil {
+		t.Fatal(err)
+	}
+	// npm：Claude、Codex、OpenCode 各两条（探测+安装）
+	if len(runner.commands) != 6 {
 		t.Fatalf("npm 命令 = %v", runner.commands)
 	}
 	// 用户默认配置内容与 mtime 不变

@@ -15,3 +15,4 @@
 - `adapt-codex-desktop` — Linux Codex/ChatGPT 桌面独立 home 启动与安全受管配置 — 严格
 - `fix-codex-desktop-provider-env` — Codex Desktop provider 环境变量认证与选定令牌注入 — 严格
 - `install-herdr-skill` — 以固定指纹安装 Codex Herdr 技能并纳入治理 — 严格
+- `add-opencode-2-launcher` — OpenCode 2.x 运行时 provider 注入与零接触启动 — 严格

@@ -27,9 +27,10 @@
 | 组件 | 要求 | 用途 |
 |---|---|---|
 | Go | ≥ 1.24.11 | 编译网关 |
-| Node.js + npm | ≥ 18 | `agw install` 安装 claude/codex（仅安装时需要） |
+| Node.js + npm | ≥ 18 | `agw install` 安装 claude/codex/opencode（仅安装时需要） |
 | git | 任意近期版本 | 业务项目版本管理（可选） |
 | 操作系统 | Linux x64 优先 | Windows 为 v1 非目标 |
+| OpenCode CLI | 可选，仅支持 2.x；`agw install opencode` 可安装 `@opencode/cli@^2` | 供 `agw run opencode` 启动；用户配置与凭据零接触 |
 | Codex / ChatGPT 桌面应用 | 可选，仅 Linux；自行安装 | 供 `agw run codex-desktop` 启动；agw 不安装、升级或打包桌面应用 |
 
 不需要 root；网关默认只监听 `127.0.0.1:8787`。
@@ -203,16 +204,17 @@ agw serve            # 前台运行（调试用；Ctrl-C 退出）
 - 监听地址默认 `127.0.0.1:8787`（`[gateway] listen` 可改；IPv6 必须带括号，如 `[::1]:8787`）；
   改成非回环地址启动时会显著告警。
 
-## 5. 安装与启动 Claude Code / Codex
+## 5. 安装与启动 Claude Code / Codex / OpenCode
 
 ### 5.1 一键安装（零接触你的默认配置）
 
 ```bash
 agw install claude    # npm i -g @anthropic-ai/claude-code + 预生成 .agw/ 目录
 agw install codex     # npm i -g @openai/codex + 生成 $CODEX_HOME/agw.config.toml
+agw install opencode  # npm i -g @opencode/cli@^2；不生成任何 OpenCode 配置
 ```
 
-**agw 不读取、不修改、不备份 `~/.claude/settings.json` 与 `~/.codex/config.toml`。**
+**agw 不读取、不修改、不备份 `~/.claude/settings.json`、`~/.codex/config.toml` 或你的 OpenCode 全局/项目配置与凭据。**
 
 ### 5.2 在项目里启动 agent CLI
 
@@ -221,9 +223,19 @@ agw project new demo          # 创建 projects/demo（git init + agw.toml 模�
 agw run claude --project demo # → claude --settings <根>/.agw/claude-settings.demo.json
 agw run codex  --project demo # → codex -p agw（+ 环境变量 AGW_API_KEY=<demo 项目令牌>）
 agw run codex  -- --model gpt-5.2   # `--` 之后的参数原样透传给 agent
+agw run opencode --project demo -- --model agw/agw
 ```
 
-### 5.2.1 启动方式说明
+### 5.2.1 OpenCode 2.x 启动方式
+
+`agw run opencode` 只支持 OpenCode 2.x；安装约束为 `@opencode/cli@^2`。启动时子进程收到：
+
+- `OPENCODE_CONFIG_CONTENT`：合法 JSON，声明 provider `agw`、`@ai-sdk/openai-compatible`、`baseURL=<网关>/v1`、`apiKey="{env:AGW_API_KEY}"` 和可选择模型 `agw`；该 JSON 不含令牌。
+- `AGW_API_KEY`：当前全局/项目档案虚拟令牌，覆盖继承环境中的旧值。
+
+OpenCode 会继续合并用户全局配置、项目配置、插件与命令；非冲突键保留，同名 `agw` provider/模型等冲突键以 agw 运行时配置为准。默认模型 `agw` 只是 OpenCode 的可选项，实际模型名仍按 agw 的 `model_map` / `default_model` 路由；可用 OpenCode 原生 `-- --model ...` 覆盖。OpenCode 后台 service、登录、权限与会话数据由 OpenCode 自己管理；如需独立/排查，请使用 OpenCode 原生 `--standalone` 或 service 命令，agw 不提供 reset。
+
+### 5.2.2 启动方式说明
 
 - 不带 `--project` 时按当前目录推断（cwd 在 `projects/<名>` 下即用该项目，否则全局档案）。
 - 进程以 exec 替换方式启动：Ctrl-C 直达 agent，无中间进程。
@@ -338,6 +350,10 @@ agw status                               # 各供应商状态：closed/open/half
 
 | 现象 | 原因与处理 |
 |---|---|
+| OpenCode 找不到命令/版本不符 | 运行 `agw install opencode`（安装 `@opencode/cli@^2`），或自行确保已安装 OpenCode 2.x；OpenCode 1.x 不在支持范围 |
+| OpenCode 模型不合适 | 默认占位为 `agw/agw`；用 `agw run opencode -- --model <provider/model>` 透传 OpenCode 原生模型参数 |
+| 用户 OpenCode 配置与 `agw` provider 同名冲突 | agw 通过 `OPENCODE_CONFIG_CONTENT` 覆盖同名 provider/模型冲突键；建议用户侧改名，非冲突配置继续生效 |
+| OpenCode service 异常 | agw 不管理 service；使用 OpenCode 原生 service 命令，或启动时加 `--standalone` |
 | agent 报 401 "未知或缺失虚拟令牌" | 没经 `agw run` 启动或令牌被改过；重新 `agw run ...`，或查 `config/local.toml` 令牌 |
 | 401 但上游密钥正常 | 项目 `agw.toml` 引用了不存在的供应商（503 配置错误文案会点名）；`agw provider list` 核对 |
 | 503 "档案内没有启用的供应商" | 全部被 disable 或项目覆盖列表为空；`agw provider list` 检查 |
@@ -357,7 +373,8 @@ agw status                               # 各供应商状态：closed/open/half
 agw stop                                  # 停网关
 rm -f "$CODEX_HOME/agw.config.toml"       # 删 codex 独立 profile（CODEX_HOME 缺省 ~/.codex）
 rm -rf <网关根>/.agw                      # 删 claude settings 与 Linux 桌面独立 home（含项目令牌/备份）
-npm rm -g @anthropic-ai/claude-code @openai/codex   # 如需连 agent 一起卸载
+opencode uninstall                                # 如需卸载 OpenCode CLI（agw 未生成其配置）
+npm rm -g @anthropic-ai/claude-code @openai/codex   # 如需连 Claude/Codex agent 一起卸载
 ```
 
 你的 `~/.claude/settings.json` 与 `~/.codex/config.toml` 从未被 agw 修改，无需恢复；

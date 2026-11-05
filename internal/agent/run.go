@@ -19,6 +19,8 @@ const (
 	KindCodex  = "codex"
 	// KindCodexDesktop 是 Linux Codex/ChatGPT 桌面应用入口。
 	KindCodexDesktop = "codex-desktop"
+	// KindOpenCode 是 OpenCode 2.x CLI 入口。
+	KindOpenCode = "opencode"
 )
 
 // PrepareExec 解析项目与令牌，组装 exec 所需的 env/dir/argv。
@@ -64,6 +66,14 @@ func PrepareExec(root, kind, project string, extraArgs []string) (map[string]str
 		}
 		env["AGW_API_KEY"] = token
 		argv = append([]string{"codex", "-p", "agw"}, extraArgs...)
+	case KindOpenCode:
+		content, err := OpenCodeConfigContent(listen)
+		if err != nil {
+			return nil, "", nil, err
+		}
+		env["AGW_API_KEY"] = token
+		env["OPENCODE_CONFIG_CONTENT"] = content
+		argv = append([]string{"opencode"}, extraArgs...)
 	case KindCodexDesktop:
 		app, err := resolveCodexDesktopApp()
 		if err != nil {
@@ -77,7 +87,7 @@ func PrepareExec(root, kind, project string, extraArgs []string) (map[string]str
 		env["AGW_API_KEY"] = token
 		argv = append([]string{app}, extraArgs...)
 	default:
-		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex | codex-desktop）", kind)
+		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex | codex-desktop | opencode）", kind)
 	}
 	return env, dir, argv, nil
 }
