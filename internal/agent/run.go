@@ -87,7 +87,7 @@ func PrepareExec(root, kind, project string, extraArgs []string) (map[string]str
 		env["AGW_API_KEY"] = token
 		argv = append([]string{app}, extraArgs...)
 	default:
-		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex | codex-desktop）", kind)
+		return nil, "", nil, fmt.Errorf("未知 agent: %s（claude | codex | codex-desktop | opencode）", kind)
 	}
 	return env, dir, argv, nil
 }

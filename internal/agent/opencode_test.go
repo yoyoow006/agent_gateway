@@ -159,3 +159,10 @@ func entryNames(entries []os.DirEntry) []string {
 	}
 	return names
 }
+
+func TestPrepareExecUnknownAgentListsOpenCode(t *testing.T) {
+	_, _, _, err := PrepareExec(t.TempDir(), "unknown", "", nil)
+	if err == nil || !strings.Contains(err.Error(), "opencode") {
+		t.Fatalf("unknown agent error should include opencode: %v", err)
+	}
+}
