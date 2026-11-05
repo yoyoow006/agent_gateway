@@ -133,6 +133,53 @@ func EnsureCodexProfile(codexHome, listen string) error {
 	return os.WriteFile(filepath.Join(codexHome, "agw.config.toml"), []byte(sb.String()), 0o600)
 }
 
+// OpenCodeConfigContent 生成 OpenCode 2.x 的运行时 inline 配置。
+// 只引用子进程环境变量 AGW_API_KEY，不写入 token，也不落盘。
+func OpenCodeConfigContent(listen string) (string, error) {
+	baseURL, err := config.BaseURL(listen)
+	if err != nil {
+		return "", fmt.Errorf("生成 opencode 配置失败: %w", err)
+	}
+	var cfg struct {
+		Provider struct {
+			Agw struct {
+				NPM     string `json:"npm"`
+				Name    string `json:"name"`
+				Options struct {
+					BaseURL string `json:"baseURL"`
+					APIKey  string `json:"apiKey"`
+				} `json:"options"`
+				Models struct {
+					Agw struct {
+						Name string `json:"name"`
+					} `json:"agw"`
+				} `json:"models"`
+			} `json:"agw"`
+		} `json:"provider"`
+	}
+	cfg.Provider.Agw.NPM = "@ai-sdk/openai-compatible"
+	cfg.Provider.Agw.Name = "agw"
+	cfg.Provider.Agw.Options.BaseURL = baseURL + "/v1"
+	cfg.Provider.Agw.Options.APIKey = "{env:AGW_API_KEY}"
+	cfg.Provider.Agw.Models.Agw.Name = "agw"
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		return "", fmt.Errorf("生成 opencode 配置失败: %w", err)
+	}
+	return string(out), nil
+}
+
+// InstallOpenCode 安装 OpenCode 2.x；不生成或修改任何 OpenCode 用户配置。
+func InstallOpenCode(opts Options) error {
+	opts.fill()
+	if err := npmInstall(opts.Runner, "@opencode/cli@^2"); err != nil {
+		return err
+	}
+	fmt.Printf("OpenCode 2.x 已安装。\n使用：agw run opencode [--project <名>]（启动时注入运行时配置，你的 OpenCode 配置与凭据不会被修改）\n")
+	fmt.Printf("回滚：agw 未生成 OpenCode 配置；如需卸载 CLI 可运行 opencode uninstall 或 npm uninstall -g @opencode/cli\n")
+	return nil
+}
+
 // InstallClaude 安装 Claude Code 并预生成独立配置目录；不触碰 ~/.claude。
 func InstallClaude(opts Options) error {
 	opts.fill()
