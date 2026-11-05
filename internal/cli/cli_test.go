@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -774,5 +775,72 @@ func TestRunRejectsResetOutsideCodexDesktop(t *testing.T) {
 	}
 	if err := resetOnlyCodexDesktop("codex-desktop"); err != nil {
 		t.Fatalf("codex-desktop reset kind should validate: %v", err)
+	}
+}
+
+func TestRunOpenCodeUsesRuntimeConfig(t *testing.T) {
+	root := writeRepo(t, map[string]string{
+		"config/local.toml": `
+[gateway]
+default_token = "agw-g"
+
+[projects.demo]
+token = "agw-demo"
+`,
+		"projects/demo/.keep": "",
+	})
+	t.Setenv("HOME", t.TempDir())
+
+	var captured struct {
+		called bool
+		env    map[string]string
+		dir    string
+		argv   []string
+	}
+	prev := execAgent
+	execAgent = func(env map[string]string, dir string, argv []string) error {
+		captured.called, captured.env, captured.dir, captured.argv = true, env, dir, argv
+		return nil
+	}
+	defer func() { execAgent = prev }()
+
+	cmd := NewRootCmd()
+	// runCmd 是进程内单例；前序 desktop reset 测试会留下 true，显式归零隔离测试状态。
+	cmd.SetArgs([]string{"run", "--root", root, "--reset=false", "opencode", "--project", "demo", "--", "--model", "agw/custom"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !captured.called {
+		t.Fatal("agent was not launched")
+	}
+	if captured.dir != filepath.Join(root, "projects", "demo") {
+		t.Fatalf("dir = %q", captured.dir)
+	}
+	if captured.env["AGW_API_KEY"] != "agw-demo" || !strings.Contains(captured.env["OPENCODE_CONFIG_CONTENT"], "{env:AGW_API_KEY}") {
+		t.Fatalf("env = %v", captured.env)
+	}
+	if strings.Contains(captured.env["OPENCODE_CONFIG_CONTENT"], "agw-demo") {
+		t.Fatal("runtime config contains token")
+	}
+	wantArgv := []string{"opencode", "--model", "agw/custom"}
+	if !reflect.DeepEqual(captured.argv, wantArgv) {
+		t.Fatalf("argv = %v, want %v", captured.argv, wantArgv)
+	}
+}
+
+func TestAgentCommandUsageIncludesOpenCode(t *testing.T) {
+	install, _, err := NewRootCmd().Find([]string{"install"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, _, err := NewRootCmd().Find([]string{"run"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(install.Use, "opencode") || !strings.Contains(run.Use, "opencode") {
+		t.Fatalf("usage install=%q run=%q", install.Use, run.Use)
+	}
+	if got := run.Flags().Lookup("reset").Usage; !strings.Contains(got, "仅 codex-desktop") {
+		t.Fatalf("reset usage changed: %q", got)
 	}
 }
